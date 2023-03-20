@@ -1,0 +1,429 @@
+---
+title: "Don't Mis-Measure Measurement Model Measurement Error"
+subtitle: "OMG Workshop"
+author: "Bertrand Wilden"
+date: \today
+output: binb::metropolis
+header-includes:
+   - \usepackage{tikz}
+   - \usetikzlibrary{positioning}
+   - \usepackage{xcolor}
+fontsize: 12pt
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE, cache.lazy = FALSE)
+
+pacman::p_load(
+  "tidyverse",
+  "here",
+  "patchwork",
+  "targets",
+  "kableExtra",
+  "tidybayes",
+  "ggdist",
+  "MetBrewer",
+  "targets"
+)
+
+options(scipen = 1, digits = 3)
+```
+
+##
+
+**Measurement Models**
+
+- Used to measure latent variables: *ideology, corruption, democracy, racial resentment*
+
+**Theory-Testing Models**
+
+- Testing a causal theory: *being an ideologically extreme candidate hurts one's reelection chances*
+
+##
+
+**Using Measurement Model Outputs in Theory-Testing Models**
+
+::: incremental
+  - Because measurement models are statistical constructs they contain uncertainty estimates
+  - In practice, almost everyone disregards this uncertainty and uses only the *maximum a posteriori* (MAP) values from measurement models for their theory-testing models
+    - Mean, median, mode estimates from the measurement model
+:::
+
+##
+
+**Three Problems With Ignoring Measurement Model Uncertainty**
+
+::: incremental
+  1. Uncertainty is not properly propagated in theory-testing models using MAP values
+    - ***Coefficient uncertainty is underestimated***
+  2. There is too much random noise in the MAP values
+    - ***Coefficients are biased towards zero***
+  3. Possibility of backdoor confounding through the measurement process
+    - ***Coefficients are biased in unpredictable ways***
+:::
+
+##
+
+**Measurement Model Cases**
+
+::: incremental
+  - Bayesian Improved Surname Geocoding (**BSIG**)
+    - Used to measure race/ethnicity based on names and location. Measurement model is categorical
+  - Item-Response Theory Ideal Points (**IRT**)
+    - Used to infer ideology of political actors. Measurement model is continuous
+:::
+
+##
+
+```{r}
+set.seed(1111)
+
+p1 <- tibble(race = c("AAPI", "Black", "Hispanic", "Native\nAmerican", "White"),
+       probs = round(c(MCMCpack::rdirichlet(1, c(1, 5, 15, 3, 4))), 3)) |> 
+  ggplot(aes(x = race, fill = probs, y = 0, label = probs)) +
+  ggtext::geom_textbox(color = "black", height = .15, width = .15, valign = .5, halign = .5,
+               size = 6) +
+  geom_text(aes(label = race, y = 0.25), size = 5) +
+  geom_segment(aes(x = "Hispanic", xend = "Hispanic", y = -.15, yend = -.7),
+               arrow = arrow(length = unit(.1, "inches")), color = "black", linewidth = .5) +
+  geom_text(aes(label = "Hispanic", x = "Hispanic", y = -.75), size = 8, color = "black") +
+  geomtextpath::geom_textcurve(aes(x = 0, xend = 0, yend = 0.9, y = -.4), 
+                               label = "Measurement Model", position = position_dodge(width = 1), 
+                               curvature = -.1, size = 7) +
+  geomtextpath::geom_textcurve(aes(x = 0, xend = 0, yend = -.5, y = -.9), 
+                               label = "MAP", position = position_dodge(width = 1), 
+                               curvature = -.1, size = 7) +
+  theme_void() +
+  ylim(-.9, 0.9) +
+  scale_fill_continuous(low = "white", high = met.brewer("Isfahan1", 2)[2]) +
+  theme(legend.position = "none", plot.title = element_text(hjust = .5, size = 24),
+        plot.background = element_rect(fill = "#FAFAFA", color = "#FAFAFA")) +
+  labs(title = "BISG")
+
+p2 <- tibble(x = rnorm(500, mean = .75, sd = .75)) |> 
+  ggplot(aes(x = x, label = round(mean(x), 3))) +
+  geom_histogram(bins = 75, color = "white", fill = met.brewer("Isfahan1", 2)[2]) +
+  geom_segment(aes(x = mean(x), xend = mean(x), y = 0, yend = -18), color = "white") +
+  geom_segment(aes(x = mean(x), xend = mean(x), y = 3, yend = -10), 
+               arrow = arrow(length = unit(.1, "inches")), color = "black", linewidth = .5) +
+  geom_segment(aes(x = -5, xend = 5, y = 0, yend = 0), 
+               color = "black", linewidth = 1) +
+  geom_curve(aes(x = 5, xend = 5, yend = 40, y = -3),
+             curvature = .15, position = position_dodge(width = 1)) +
+  geom_curve(aes(x = 5, xend = 5, yend = -6, y = -18),
+             curvature = .15, position = position_dodge(width = 1)) +
+  geom_text(aes(x = mean(x), y = -12), size = 8, color = "black") +
+  geom_text(aes(x = -3.5, y = -2), label = "Liberal", size = 6) +
+  geom_text(aes(x = 3.5, y = -2), label = "Conservative", size = 6) +
+  theme_void() +
+  theme(plot.title = element_text(hjust = .5, size = 24),
+        plot.background = element_rect(fill = "#FAFAFA", color = "#FAFAFA")) +
+  labs(title = "Bayesian IRT")
+
+p1 + p2
+```
+
+
+# Measurement Error and Backdoor Confounding: BSIG Example
+
+##
+
+\tikzset{
+    > = stealth,
+    every node/.append style = {
+        draw = none
+    },
+    every path/.append style = {
+        arrows = ->
+    },
+    hidden/.style = {
+        draw = black,
+        shape = circle,
+        inner sep = 1pt
+    }
+}
+
+\begin{Large}
+\begin{center}
+\tikz{
+    \node (race_s) {$R^*$};
+    \node (race_s_label) [right = .1 of race_s] {$\textcolor{teal}{\text{\normalsize Estimated Race}}$};
+    \node[hidden, dashed] (race) [above = 1.5 of race_s] {$R$};
+    \node (race_label) [above = .1 of race] {$\textcolor{teal}{\text{\normalsize True Race}}$};
+    \node (e_race) [left = 1.5 of race_s] {$e^R$};
+    \node (e_race_label) [left = 0 of e_race] {$\textcolor{teal}{\text{\normalsize Measurement Error}}$};   
+    
+    \path[dashed] (race) edge (race_s);
+    \path (e_race) edge (race_s);
+}
+\end{center}
+\end{Large}
+
+##
+
+\tikzset{
+    > = stealth,
+    every node/.append style = {
+        draw = none
+    },
+    every path/.append style = {
+        arrows = ->
+    },
+    hidden/.style = {
+        draw = black,
+        shape = circle,
+        inner sep = 1pt
+    }
+}
+
+\begin{Large}
+\begin{center}
+\tikz{
+    \node (race_s) {$R^*$};
+    \node[hidden, dashed] (race) [above = 1.5 of race_s] {$R$};
+    \node (e_race) [left = 1.5 of race_s] {$e^R$};
+    \node[hidden, dashed] (confound) [below = 1.5 of race_s] {$U$};
+    \node (confound_label) [below = .1 of confound] {$\textcolor{teal}{\text{\normalsize Confound}}$};
+    \node (y) [right = 1.5 of race_s] {$Y$};
+    \node (y_label) [above = .1 of y] {$\textcolor{teal}{\text{\normalsize Turnout}}$};
+    \node (t) [below right = 1.5 of y] {$T$};
+    \node (t_label) [below = 0 of t] {$\textcolor{teal}{\text{\normalsize Time}}$};
+
+    \path[dashed] (race) edge (race_s);
+    \path (e_race) edge (race_s);
+    \path[dashed] (confound) edge [bend left=20] (e_race);
+    \path[dashed] (confound) edge [bend right=20] (y);
+    \path (race_s) edge (y);
+    \path (t) edge (y);
+}
+\end{center}
+\end{Large}
+
+##
+
+\tikzset{
+    > = stealth,
+    every node/.append style = {
+        draw = none
+    },
+    every path/.append style = {
+        arrows = ->
+    },
+    hidden/.style = {
+        draw = black,
+        shape = circle,
+        inner sep = 1pt
+    }
+}
+
+\begin{Large}
+\begin{center}
+\tikz{
+    \node (race_s) {$R^*$};
+    \node[hidden, dashed] (race) [above = 1.5 of race_s] {$R$};
+    \node (e_race) [left = 1.5 of race_s] {$e^R$};
+    \node[hidden, dashed, red] (confound) [below = 1.5 of race_s] {$U$};
+    \node (y) [right = 1.5 of race_s] {$Y$};
+    \node (t) [below right = 1.5 of y] {$T$};
+
+    \path[dashed] (race) edge (race_s);
+    \path (e_race) edge (race_s);
+    \path[dashed, red] (confound) edge [bend left=20] (e_race);
+    \path[dashed, red] (confound) edge [bend right=20] (y);
+    \path (race_s) edge (y);
+    \path (t) edge (y);
+}
+\end{center}
+\end{Large}
+
+##
+
+\centering
+
+\textbf{Solution: Joint Bayesian Model}
+
+\raggedright
+
+\begin{equation*}
+\begin{aligned}
+   y_i  &\sim f(\pi_i) \\
+   \pi^{*}_i &\sim g(\pi_i)
+\end{aligned}
+\end{equation*}
+
+- $y$, outcome in theory-testing model
+- $\pi$, latent variable
+- $\pi^*$, MAP estimate of latent variable
+- $f(\cdot)$, theory-testing model
+- $g(\cdot)$, measurement model
+
+## 
+
+**Simplifications**
+
+::: incremental
+- Applied researchers know a lot about $f(\cdot)$, but not $g(\cdot)$
+- The real $g(\cdot)$ can take a lot of computation time
+- My solution is to use an approximation of $g(\cdot)$ that fits the measurement error posterior distribution
+:::
+
+# Measurement Error and Attenuation Bias: IRT Ideal Point Example
+
+##
+
+\tikzset{
+    > = stealth,
+    every node/.append style = {
+        draw = none
+    },
+    every path/.append style = {
+        arrows = ->
+    },
+    hidden/.style = {
+        draw = black,
+        shape = circle,
+        inner sep = 1pt
+    }
+}
+
+\begin{Large}
+\begin{center}
+\tikz{
+    \node (theta_s) {$\theta^*$};
+    \node (theta_s_label) [below = 0 of theta_s] {$\textcolor{teal}{\text{\normalsize Estimated Ideal Point}}$};
+    \node[hidden, dashed] (theta) [above = 1.5 of theta_s] {$\theta$};
+    \node (theta_label) [above = 0 of theta] {$\textcolor{teal}{\text{\normalsize True Ideal Point}}$};
+    \node (e_theta) [left = 1.5 of theta_s] {$e^\theta$};
+    \node (p) [below = 1.5 of e_theta] {$P$};
+    \node (p_label) [below = 0 of p] {$\textcolor{teal}{\text{\normalsize Participation}}$};
+    \node (y) [right = 1.5 of theta_s] {$Y$};
+    \node (y_label) [above = 0 of y] {$\textcolor{teal}{\text{\normalsize Reelection}}$};
+
+    \path (e_theta) edge (theta_s);
+    \path (theta_s) edge (y);
+    \path[dashed] (theta) edge (theta_s);
+    \path (p) edge [bend left=0] (e_theta);
+    \path[dashed] (theta) edge [bend right=30] (e_theta);
+}
+\end{center}
+\end{Large}
+
+##
+
+```{r}
+source(here::here("R", "sim_funcs.R"))
+
+set.seed(100)
+
+sim_cont_data(200, noise_x = 1, noise_a = .1, true_b = 2)$dat |> 
+  arrange(x_meas) |> 
+  mutate(id = row_number()) |> 
+  ggplot(aes(x = x_meas, y = id)) +
+  geom_pointrange(aes(xmin = x_meas - x_sd, xmax = x_meas + x_sd), 
+                  alpha = .75, size = .5, color = met.brewer("Isfahan1", 1)) +
+  geom_pointrange(aes(xmin = x_meas - x_sd * 1.96, xmax = x_meas + x_sd * 1.96), 
+                  alpha = .5, size = .5, color = met.brewer("Isfahan1", 1)) +
+  # geom_point(color = "red", size = .3, alpha = .2) + 
+  labs(x = expression(paste("Estimated Ideal Point, ", theta^{`*`})), y = "Groups (sorted)",
+       caption = "Means and Standard Errors", title = "Simulated Random Normal Error") +
+  theme_ggdist() +
+  theme(text = element_text(family = ""),
+        plot.title = element_text(size = 22),
+        axis.text = element_text(size = 16),
+        axis.title = element_text(size = 20),
+        plot.caption = element_text(size = 18),
+        plot.background = element_rect(fill = "#FAFAFA", color = "#FAFAFA"),
+        panel.background = element_rect(fill = "#FAFAFA", color = "#FAFAFA"))
+```
+
+##
+
+**Joint Model for Normal Measurement Error**
+
+\begin{equation*}
+\begin{aligned}
+  y_i &\sim \text{Normal}(\mu_i, \sigma) \\[-1pt]
+  \mu_i &= \beta_0 + \beta_1 X_{\text{TRUE,i}} \\[-1pt]
+  X_{\text{MEAS,i}} &\sim \text{Normal}(X_{\text{TRUE,i}}, X_{\text{SE,i}}) \\[-1pt]
+  X_{\text{TRUE,i}} &\sim \text{Normal}(\bar{X}_\text{TRUE}, \tau) \\[-1pt]
+  \beta_0, \beta_1 &\sim \text{Normal}(0, 2) \\[-1pt]
+  \sigma &\sim \text{Half Student t}(3, 0, 2) \\[-1pt]
+  \bar{X}_\text{TRUE} &\sim \text{Normal}(0, 1) \\[-1pt]
+  \tau &\sim \text{Half Student t}(3, 0, 2) \\
+\end{aligned}
+\end{equation*}
+
+
+
+
+##
+
+```{r}
+tar_load(cont_coef_plot)
+cont_coef_plot +
+  theme(text = element_text(family = ""),
+        axis.text = element_text(size = 16),
+        axis.title = element_text(size = 20),
+        legend.text = element_text(size = 20),
+        legend.title = element_text(size = 20),
+        plot.caption = element_text(size = 16),
+        plot.background = element_rect(fill = "#FAFAFA", color = "#FAFAFA"),
+        panel.background = element_rect(fill = "#FAFAFA", color = "#FAFAFA"),
+        legend.background = element_rect(fill = "#FAFAFA", color = "#FAFAFA")) +
+  labs(y = "Coefficient Estimate", x = "Correlation Between True Ideal Point and\nMean Measurement Error Ideal Point",
+         color = "Model Type")
+```
+
+# Skewed IRT Example
+
+##
+
+```{r}
+tar_load(theta_dist_plot)
+theta_dist_plot +
+  theme(text = element_text(family = ""),
+        plot.title = element_text(size = 22),
+        axis.text = element_text(size = 16),
+        axis.title = element_text(size = 20),
+        plot.caption = element_text(size = 18),
+        plot.background = element_rect(fill = "#FAFAFA", color = "#FAFAFA"),
+        panel.background = element_rect(fill = "#FAFAFA", color = "#FAFAFA"))
+```
+
+##
+
+**Joint Model for Skewed Measurement Error**
+
+\begin{equation*}
+\begin{aligned}
+  y_i &\sim \text{Normal}(\mu_i, \sigma) \\[-1pt]
+  \mu_i &= \beta_0 + \beta_1 X_{\text{TRUE,i}} \\[-1pt]
+  \color{teal}X_{\text{MEAS,i}} &\sim \color{teal}\text{Skew Normal}(X_{\text{TRUE,i}}, X_{\text{SE,i}}, \alpha_i) \\[-1pt]
+  X_{\text{TRUE,i}} &\sim \text{Normal}(\bar{X}_\text{TRUE}, \tau_1) \\[-1pt]
+  \color{teal}\bar{X}_\text{MEAS} - X_{\text{MEAS,i}} &\color{teal}\sim \text{Normal}(\alpha_i, \tau_2) \\[-1pt]
+  \beta_0, \beta_1 &\sim \text{Normal}(0, 2) \\[-1pt]
+  \sigma &\sim \text{Half Student t}(3, 0, 2) \\[-1pt]
+  \bar{X}_\text{TRUE} &\sim \text{Normal}(0, 1) \\[-1pt]
+  \tau_1 &\sim \text{Half Student t}(3, 0, 2) \\[-1pt]
+  \color{teal}\alpha &\color{teal}\sim \text{Normal}(0, 1) \\[-1pt]
+  \color{teal}\tau_2 &\color{teal}\sim \text{Half Student t}(3, 0, 2)
+\end{aligned}
+\end{equation*}
+
+##
+
+```{r}
+tar_load(irt_coef_plot)
+irt_coef_plot +
+  theme(text = element_text(family = ""),
+        plot.title = element_text(size = 22),
+        axis.text = element_text(size = 16),
+        axis.title = element_text(size = 20),
+        plot.caption = element_text(size = 16),
+        plot.background = element_rect(fill = "#FAFAFA", color = "#FAFAFA"),
+        panel.background = element_rect(fill = "#FAFAFA", color = "#FAFAFA"))
+```
+
+- Coefficient estimate attenuation of about 15% in realistic IRT example
+
+# Thank you!

@@ -1,0 +1,45 @@
+---
+title: "Modeling Measurement Model Measurement Error"
+subtitle: "OMG March 7, 2023"
+author: "Bertrand Wilden"
+format: 
+  beamer:
+    theme: AnnArbor
+    include-in-header:
+      text:
+        \usepackage{amsmath}
+---
+
+\usetikzlibrary{positioning}
+\tikzset{
+    > = stealth,
+    every node/.append style = {
+        draw = none
+    },
+    every path/.append style = {
+        arrows = ->
+    },
+    hidden/.style = {
+        draw = black,
+        shape = circle,
+        inner sep = 1pt
+    }
+}
+
+## DAG
+
+<!-- \begin{Large} -->
+<!-- \begin{center} -->
+<!-- \tikz{ -->
+<!--     \node (race_s) {$R^*$}; -->
+<!--     \node (race_s_label) [right = .1 of race_s] {$\textcolor{teal}{\text{\normalsize Estimated Race}}$}; -->
+<!--     \node[hidden, dashed] (race) [above = 1.5 of race_s] {$R$}; -->
+<!--     \node (race_label) [above = .1 of race] {$\textcolor{teal}{\text{\normalsize True Race}}$}; -->
+<!--     \node (e_race) [left = 1.5 of race_s] {$e^R$}; -->
+<!--     \node (e_race_label) [left = 0 of e_race] {$\textcolor{teal}{\text{\normalsize Measurement Error}}$};    -->
+
+<!--     \path[dashed] (race) edge (race_s); -->
+<!--     \path (e_race) edge (race_s); -->
+<!-- } -->
+<!-- \end{center} -->
+<!-- \end{Large} -->

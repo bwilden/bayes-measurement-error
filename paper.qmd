@@ -56,6 +56,7 @@ knitr::write_bib(.packages(), "packages.bib")
     }
 }
 ```
+
 # Introduction
 
 Variables of interest in the social sciences are often things we cannot directly observe or measure. Examples include the level of democracy or corruption in a country, or the political ideology of an individual or group. Latent variables such as these must be inferred through indirect processes. One common method is to build statistical models which purport to estimate latent variables using observable input data. I will refer to these as *measurement models*. The outputs of measurement models are then used in subsequent inference procedures to test substantive theories in social science. I will refer to this set of models as *theory-testing models*.
@@ -117,6 +118,58 @@ p2 <- tibble(x = rnorm(500, mean = .75, sd = .75)) |>
 
 p1 + p2
 ```
+
+
+```{r}
+#| eval: false
+p1 <- tibble(race = rep(c("AAPI", "Black", "Hispanic", "Native\nAmerican", "White"), 3),
+       probs = round(
+         c(MCMCpack::rdirichlet(1, c(1, 1, 20, 1, 1)),
+           MCMCpack::rdirichlet(1, c(1, 1, 10, 1, 10)),
+           MCMCpack::rdirichlet(1, c(5, 5, 8, 5, 5))), 
+         3),
+       model = c(rep("a", 5),
+                 rep("b", 5),
+                 rep("c", 5))) |> 
+  ggplot(aes(x = probs, y = model, fill = race)) +
+  geom_bar(stat = "identity") +
+  scale_fill_met_d("Cross") +
+  theme_void() +
+  theme(legend.position = "none")
+
+p2 <- ggplot() +
+  stat_function(fun = dnorm,
+                args = list(sd = 1), 
+                geom = "area", fill = met.brewer("Cross")[[7]], alpha = 1) +
+    stat_function(fun = dnorm,
+                args = list(sd = 1), 
+                color = "white", linewidth = 1, linetype = "solid") +
+  xlim(-9, 9) +
+  theme_void()
+
+p3 <- ggplot() +
+  stat_function(fun = dnorm,
+                args = list(sd = 3), 
+                geom = "area", fill = met.brewer("Cross")[[7]], alpha = 1) +
+  stat_function(fun = dnorm,
+                args = list(sd = 3), 
+                color = "white", linewidth = 1, linetype = "solid") +
+  xlim(-9, 9) +
+  theme_void()
+
+p4 <- ggplot() +
+  stat_function(fun = sn::dsn,
+                args = list(alpha = -3, omega = 3, xi = 3), 
+                geom = "area", fill = met.brewer("Cross")[[7]], alpha = 1) +
+  stat_function(fun = sn::dsn,
+                args = list(alpha = -3, omega = 3, xi = 3), 
+                color = "white", linewidth = 1, linetype = "solid") +
+  xlim(-9, 9) +
+  theme_void()
+
+p1 + (p2 / p4 / p3)
+```
+
 
 While the two types of measurement models I consider: continuous and discrete, pose different practical challenges in how their outputs should be used in theory-testing models, the underlying logic in the method I propose applies to both. In short, the measurement process and theory-testing procedure should happen simultaneously in a single model. This is handled straightforwardly using the Bayesian statistical framework, which can easily treat parameters and data interchangeably [@mcelreath2020]. We start by specifying the full measurement model, whose posterior distributions for each observation's value of the latent variable are then used as data in the theory-testing model. The stylized version of this joint model is shown in @eq-ex-equation, where $g(\cdot)$ is the measurement model which produces posterior values of the latent variable, $\theta_i$ based on the observations $\theta^*_i$. The posterior estimates for $\theta_i$ from the measurement model are then used as data in the theory-testing model $y_i \sim f(\cdot)$.
 
