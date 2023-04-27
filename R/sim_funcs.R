@@ -27,7 +27,7 @@ sim_categorical_data = function(N, turnout, bias) {
     as_tibble()
   
   stan_list <- list(
-    N = N,
+    N = nrow(dat),
     K = length(unique(x)),
     x = as.numeric(as.factor(x)),
     x_meas = as.numeric(as.factor(x_meas)),
@@ -151,7 +151,7 @@ sim_bias_dist_data <- function(N, n_draws = 1000, true_b = 0, bias) {
   dat <- tibble(
     unit = as.character(1:N),
     x = rnorm(N),
-    u = rnorm(N, sd = 3),
+    u = rnorm(N, sd = 1),
     x_sd = rexp(N)
   ) |>
     # filter(abs(u) < 1) |>
@@ -187,8 +187,8 @@ sim_bias_dist_data <- function(N, n_draws = 1000, true_b = 0, bias) {
 
 
 # set.seed(111)
-# x <- rsn(10000, xi = 0, omega = 1, alpha = -0.5)
-# mod <- selm(x ~ 1, family = "SN")
+# x <- rst(1000, xi = 0, omega = 1, alpha = -0.5, nu = 30)
+# mod <- selm(x ~ 1, family = "ST")
 # extractSECdistr(mod)
 
 
@@ -220,3 +220,11 @@ sim_irt_data <- function(n_groups, n_items, missing_pct) {
 }
 
 
+sim_skewt <- function(N, xi, omega, alpha) {
+  x <- rsn(n = N, xi = xi, omega = omega, alpha = alpha)
+  stan_list <- list(
+    N = N,
+    x = x
+  )
+  return(stan_list)
+} 

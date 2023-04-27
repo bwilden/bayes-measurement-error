@@ -8,7 +8,7 @@ data {
 }
 
 parameters {
-  real alpha;           
+  real beta0;           
   real beta;            
   real<lower=0> sigma;
   array[N] real x;       
@@ -17,7 +17,7 @@ parameters {
 }
 
 model {
-  alpha ~ normal(0, 2);
+  beta0 ~ normal(0, 2);
   beta ~ normal(0, 2);
   sigma ~ student_t(3, 0, 2);
   tau ~ student_t(3, 0, 2);
@@ -27,7 +27,7 @@ model {
   for (i in 1:N) {
     x_meas[i] ~ skew_normal(x[i], x_sd[i], x_skew[i]);
         
-    y[i] ~ normal(alpha + beta * x[i], sigma);
+    y[i] ~ normal(beta0 + beta * x[i], sigma);
   }
 }
 

@@ -104,7 +104,7 @@ list(
   # Bias ME
   tar_target(
     bias_data,
-    sim_bias_dist_data(1000, true_b = 0, bias = 100)
+    sim_bias_dist_data(1000, true_b = 0, bias = 10)
   ),
   tar_stan_mcmc(
     me_cont_bias,
@@ -121,37 +121,11 @@ list(
     compare_coefs(me_cont_bias_draws_skew, 
                   no_me_cont_bias_draws_no_me_cont,
                   true = 0)
+  ),
+  tar_stan_mcmc(
+    skew_test,
+    stan_file = here("stan", "skewt.stan"),
+    data = list(N = 10000,
+                x = sn::rsn(10000, xi = 0, omega = 1, alpha = 0.1))
   )
-  # tar_target(
-  #   cat_data,
-  #   sim_categorical_data(N = 100,
-  #                        turnout = lst(a = 0.7, b = 0.5, c = 0.3),
-  #                        bias = 0)
-  # ),
-  # tar_target(
-  #   bin_data,
-  #   sim_binary_data(N = 300,
-  #                   turnout = lst(
-  #                     black = 0.3,
-  #                     white = 0.7
-  #                   ),
-  #                   bias = 0)
-  # ),
-  # tar_stan_mcmc(
-  #   me_cat,
-  #   stan_files = here("stan", "me_cat.stan"),
-  #   data = cat_data$stan_list,
-  #   threads_per_chain = 2
-  # ),
-  # tar_stan_mcmc(
-  #   meas_cat,
-  #   stan_files = here("stan", "no_me_cat.stan"),
-  #   data = cat_data$stan_list,
-  #   threads_per_chain = 2
-  # ),
-  # tar_target(
-  #   cat_coef_plot,
-  #   compare_cat_coefs(me = me_cat_draws_me_cat,
-  #                     meas = meas_cat_draws_no_me_cat)
-  # )
 )
