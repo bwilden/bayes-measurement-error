@@ -21,6 +21,7 @@ tar_source(here("R", "sim_funcs.R"))
 tar_source(here("R", "stan_funcs.R"))
 tar_source(here("R", "post-process_funcs.R"))
 tar_source(here("R", "plot_funcs.R"))
+tar_source(here("R", "house_reelection_funcs.R"))
 
 options(mc.cores = parallel::detectCores() - 1)
 
@@ -127,5 +128,17 @@ list(
     stan_file = here("stan", "skewt.stan"),
     data = list(N = 10000,
                 x = sn::rsn(10000, xi = 0, omega = 1, alpha = 0.1))
+  ),
+  
+  # House Re-election Analysis
+  tar_target(
+    raw_votes,
+    here::here("data-raw", "1976-2020-house.csv"),
+    format = "file"
+  ),
+  tar_target(
+    raw_legis,
+    here::here("data-raw", "CELHouse93to117Classic-1.xls"),
+    format = "file"
   )
 )
