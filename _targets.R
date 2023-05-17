@@ -133,12 +133,24 @@ list(
   # House Re-election Analysis
   tar_target(
     raw_votes,
-    here::here("data-raw", "1976-2020-house.csv"),
+    here::here("data-raw", "Hall_votes.csv"),
     format = "file"
   ),
   tar_target(
     raw_legis,
     here::here("data-raw", "CELHouse93to117Classic-1.xls"),
     format = "file"
+  ),
+  tar_target(
+    votes_rc,
+    prep_votes_rc(raw_votes)
+  ),
+  tar_target(
+    votes_ideal,
+    map(votes_rc,
+        pscl::ideal,
+        dropList = list(lop = NA),
+        normalize = TRUE,
+        .progress = TRUE)
   )
 )
