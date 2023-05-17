@@ -54,3 +54,18 @@ process_ideal_points <- function(ideal_obj, congress) {
   return(ideal_summaries)
 }
 
+prep_legis <- function(legis_file) {
+  legis <- readxl::read_xls(legis_file) |> 
+    janitor::clean_names() |> 
+    mutate(icpsr = as.character(icpsr_number_according_to_poole_and_rosenthal),
+           congress = congress_number,
+           female = x1_female,
+           vote_pct = percent_vote_received_to_enter_this_congress,
+           party = case_when(x100_dem_200_rep_other == 100 ~ "D",
+                             x100_dem_200_rep_other == 200 ~ "R",
+                             TRUE ~ NA_character_)) |> 
+    dplyr::select(icpsr, congress, female, vote_pct, party)
+  
+  return(legis)
+}
+

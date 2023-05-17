@@ -158,5 +158,15 @@ list(
     pmap_dfr(tibble(ideal_obj = votes_ideal, congress = 93:117),
              process_ideal_points,
              .progress = TRUE)
+  ),
+  tar_target(
+    clean_legis,
+    prep_legis(raw_legis)
+  ),
+  tar_target(
+    legis_ideal,
+    left_join(clean_legis, votes_ideal_dps,
+              by = c("icpsr", "congress")) |> 
+      group_split(party)
   )
 )
