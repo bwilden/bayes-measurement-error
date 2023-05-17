@@ -27,16 +27,30 @@ prep_votes_rc <- function(votes_file) {
   
   return(votes_list_rc)
 }
-# a<-prep_votes(here::here("data-raw", "Hall_votes.csv"))
-# c <- a[[1]]
-# d <- a[[1]] |> dplyr::select(-icpsr)
-# 
-# f <- pscl::rollcall(d, legis.names = c$icpsr)
-# 
-# 
-# 
-# a[[1]] |> 
-#   pscl::ideal(
-#         dropList = list(lop = NA),
-#         normalize = TRUE)
+
+
+process_ideal_points <- function(ideal_obj, congress) {
+  ideal_summaries <- as_tibble(ideal_obj$x) |> 
+    pivot_longer(cols = everything(),
+                 names_to = "icpsr",
+                 values_to = "ideal_point") |> 
+    nest_by(icpsr) |> 
+    mutate(normal_mod = list(selm(ideal_point ~ 1, data = data, fixed.param = list(alpha = 0))),
+           normal_dp = list(extractSECdistr(normal_mod)),
+           # Normal dps
+           mu = slot(normal_dp, "dp")[["xi"]],
+           sigma = slot(normal_dp, "dp")[["omega"]],
+           skew_mod = list(selm(ideal_point ~ 1, data = data)),
+           skew_dp = list(extractSECdistr(skew_mod)),
+           # Skew normal dps
+           xi = slot(skew_dp, "dp")[["xi"]],
+           omega = slot(skew_dp, "dp")[["omega"]],
+           alpha = slot(skew_dp, "dp")[["alpha"]]) |> 
+    unnest(data) |> 
+    dplyr::select(icpsr, mu, sigma, xi, omega, alpha) |> 
+    distinct() |> 
+    mutate(icpsr = str_remove(icpsr, ".D1"),
+           congress := congress)
+  return(ideal_summaries)
+}
 

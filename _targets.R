@@ -152,5 +152,11 @@ list(
         dropList = list(lop = NA),
         normalize = TRUE,
         .progress = TRUE)
+  ),
+  tar_target(
+    votes_ideal_dps,
+    pmap_dfr(tibble(ideal_obj = votes_ideal, congress = 93:117),
+             process_ideal_points,
+             .progress = TRUE)
   )
 )
