@@ -25,6 +25,8 @@ tar_source(here("R", "house_reelection_funcs.R"))
 
 options(mc.cores = parallel::detectCores() - 1)
 
+select <- dplyr::select
+
 true_b = 1
 
 list(
@@ -142,6 +144,17 @@ list(
     format = "file"
   ),
   tar_target(
+    district_files,
+    list.files(here::here("data-raw", "prcd"), pattern = "*.csv", full.names = TRUE),
+    format = "file"
+  ),
+  tar_target(
+    district_pres_votes,
+    pmap_dfr(tibble(district_file = district_files,
+                    congress = 103:115),
+             prep_district_presidential_votes)
+  ),
+  tar_target(
     votes_rc,
     prep_votes_rc(raw_votes)
   ),
@@ -167,6 +180,7 @@ list(
     legis_ideal,
     left_join(clean_legis, votes_ideal_dps,
               by = c("icpsr", "congress")) |> 
+      left_join(district_pres_votes, by = c("state", "district", "congress")) |> 
       group_split(party)
   )
 )
