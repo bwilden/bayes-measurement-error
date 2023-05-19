@@ -56,18 +56,30 @@ knitr::write_bib(.packages(), "packages.bib")
     }
 }
 ```
-
 # Introduction
 
 Variables of interest in the social sciences are often things we cannot directly observe or measure. Examples include the level of democracy or corruption in a country, or the political ideology of an individual or group. Latent variables such as these must be inferred through indirect processes. One common method is to build statistical models which purport to estimate latent variables using observable input data. I will refer to these as *measurement models*. The outputs of measurement models are then used in subsequent inference procedures to test substantive theories in social science. I will refer to this set of models as *theory-testing models*.
 
-In practice, information about the latent variable is often lost when researchers move from measurement to theory-testing. Measurement models do not simply output a single value for the underlying latent variable. Instead, by virtue of being statistical models, they produce *estimates of uncertainty* for each observation. This is particularly true for Bayesian measurement models, whose output is the full posterior distribution of latent variable values according their relative plausibility---not a single point estimate. Failure to propagate this uncertainty from the measurement model into the theory-testing model, as I will show, can lead to biased and/or overly confident substantive conclusions.
+In practice, information about the latent variable is often lost when researchers move from measurement to theory-testing. Measurement models do not simply output a single value for the underlying latent variable. Instead, by virtue of being statistical models, they produce *estimates of uncertainty* for each observation. This is particularly true for Bayesian measurement models, whose output is the full posterior distribution of latent variable values according their relative plausibility---not a single point estimate. Failure to propagate this uncertainty from the measurement model into the theory-testing model, as I will show, can lead to mistaken conclusions regarding the underlying research question. And unlike so-called "classical" measurement error, whose attenuation bias properties are generally well understood, the mistakes I investigate can lead to bias in unpredictable directions.
 
-In this paper I develop two methods---one for continuous latent variables and one for discrete latent variables---which incorporate measurement model uncertainty into theory-testing models. I will use two running examples to help illustrate these methods. The first is the Bayesian Item-Response Theory (IRT) model used to measure political ideology [@clinton2004]. Political ideology is typically imagined as existing on a latent left-right dimension. Bayesian IRT measurement models produce a posterior distribution of continuous values for each actor (e.g. member of Congress) on the left-right scale. The second illustrative model is Bayesian Improved Surname Geocoding (BISG), used to measure individuals' race and ethnicity in the absence of self-reported values for these characteristics [@elliott2009]. Unlike political ideology, which could conceivably take any real-number value on the left-right scale, race and ethnicity are usually considered to be discrete, un-ordered, categories.[^1] BISG measurement models, therefore, output a simplex for each individual corresponding to the posterior probability that they identify as a member of each potential racial or ethnic group.
-
-[^1]: For an alternative conception of race in social identity theory see @abdelal2006 .
+In this paper I demonstrate the problems associated with failing to include measurement model measurement error in theory-testing models, and I develop a method for overcoming these issues. This method is appropriate for any continuous-valued latent variable generated from a Bayesian measurement model. One of the most common types of these in the political science literature is the Bayesian Item-Response Theory (IRT) model used to measure political ideology [@clinton2004; @bafumi2005]. Political ideology is typically imagined as existing on a latent left-right dimension. Bayesian IRT measurement models produce a posterior distribution of continuous values for each actor (e.g. member of Congress) on the left-right scale.
 
 Theory-testing research which uses these two measurement models typically reduces the posterior distributions down to a single *maximum a posteriori* (MAP) value. In the case of Bayesian IRT models, researchers select some statistic of central tendency from each posterior distribution to use in subsequent analyses, such as the mean, median, or mode. For BISG models, simply the race or ethnicity with highest posterior probability in the simplex is chosen. @fig-measurement-model shows visually how information is lost when reducing the measurement model's posterior output to a single MAP value.
+
+```{r}
+#| label: fig-measurement-model
+#| fig-cap: "Ignoring Measurement Error in Measurement Models"
+N <- 100000
+tibble(x = c(rnorm(N, sd = 1.5),
+             rnorm(N, sd = 4),
+             sn::rsn(N, alpha = -4, omega = 4, xi = 3)),
+       y = c(rep("a", N), rep("b", N), rep("c", N))) |> 
+  ggplot(aes(x = x)) +
+  geom_density(color = "black", fill = "darkcyan", alpha = .5) +
+  facet_wrap(~ y, nrow = 1) +
+  theme_void()
+```
+
 
 ```{r}
 #| label: fig-measurement-model
@@ -119,7 +131,6 @@ p2 <- tibble(x = rnorm(500, mean = .75, sd = .75)) |>
 p1 + p2
 ```
 
-
 ```{r}
 #| eval: false
 p1 <- tibble(race = rep(c("AAPI", "Black", "Hispanic", "Native\nAmerican", "White"), 3),
@@ -170,7 +181,6 @@ p4 <- ggplot() +
 p1 + (p2 / p4 / p3)
 ```
 
-
 While the two types of measurement models I consider: continuous and discrete, pose different practical challenges in how their outputs should be used in theory-testing models, the underlying logic in the method I propose applies to both. In short, the measurement process and theory-testing procedure should happen simultaneously in a single model. This is handled straightforwardly using the Bayesian statistical framework, which can easily treat parameters and data interchangeably [@mcelreath2020]. We start by specifying the full measurement model, whose posterior distributions for each observation's value of the latent variable are then used as data in the theory-testing model. The stylized version of this joint model is shown in @eq-ex-equation, where $g(\cdot)$ is the measurement model which produces posterior values of the latent variable, $\theta_i$ based on the observations $\theta^*_i$. The posterior estimates for $\theta_i$ from the measurement model are then used as data in the theory-testing model $y_i \sim f(\cdot)$.
 
 $$
@@ -188,9 +198,9 @@ My method overcomes the two problems outlined above by simplifying the measureme
 
 In this section I will provide additional motivation for why researchers should care about measurement model uncertainty when using latent variables in their theory-testing models. Usually, theory-testing models are used to answer some causal question: *what is the effect of X on Y*? The observed relationship between X and Y is often confounded by other variables in the system exerting causal influence. Theory-testing models, therefore, need to condition on these confounding variables in order to get an unbiased estimate of the causal effect of interest. While this general method for theory testing is well-understood in the social sciences [@rubin1974; @morgan2007], it is less common to apply the same causal logic to measurement. Failing to do so, I argue, can lead to erroneous substantive conclusions.
 
-I will demonstrate my argument using the causal graph framework [@pearl2000]. Causal graphs are heuristic tools that map out causal relationships between variables in a particular system. Each node represents a variable, and the directed edges between nodes represent hypothesized causal impacts of one variable on another. These directed-acyclic-graphs (DAGs) are useful because they allow us to determine the set of variables we need to condition on in order to get an unbiased estimate of the effect of our primary independent variable on the dependent variable. This set of confounders is defined by the variables which are needed to close every "backdoor" path between the primary independent and dependent variables.[^2]
+I will demonstrate my argument using the causal graph framework [@pearl2000]. Causal graphs are heuristic tools that map out causal relationships between variables in a particular system. Each node represents a variable, and the directed edges between nodes represent hypothesized causal impacts of one variable on another. These directed-acyclic-graphs (DAGs) are useful because they allow us to determine the set of variables we need to condition on in order to get an unbiased estimate of the effect of our primary independent variable on the dependent variable. This set of confounders is defined by the variables which are needed to close every "backdoor" path between the primary independent and dependent variables.[^1]
 
-[^2]: See @cinelli2020 for a more complete introduction to deconfounding using DAGs.
+[^1]: See @cinelli2020 for a more complete introduction to deconfounding using DAGs.
 
 ## Measurement Error Confounding Bias
 
@@ -283,7 +293,6 @@ Measurement model errors can also take the form of classical measurement error. 
 
 In this section I will demonstrate, through simulations, how my method of constructing a joint measurement theory-testing model can help mitigate attenuation bias that arises from classic measurement error. @fig-ideal-dag shows the causal process which produces ideal point estimates, $\theta^*$ in a Bayesian IRT model. As in the BSIG case, our observed measurements come from an unobserved latent variable plus some measurement error. At least two variables can affect the measurement error, $e^{\theta}$ in @fig-ideal-dag. The true ideal point of the group, $\theta$ influences the amount of measurement error for estimates of the group's ideology because, as we move further from the ideological center of the scale, uncertainty increases. @fig-irt-dist shows an example of what the distribution of posterior estimates from a Bayesian IRT model look like. Groups further from the center have much wider ideal point posterior distributions. The second variable affecting $e^{\theta}$ is group participation, $P$---how often the group signals its position among the items in the model. Groups that signal more positions on items will have smaller levels of measurement error compared to groups that signal fewer positions because we have more data on their true ideological preferences.
 
-
 ```{r}
 #| label: fig-irt-dist
 #| fig-cap: "Bayesian IRT Posterior Distributions"
@@ -292,7 +301,7 @@ source(here::here("R", "sim_funcs.R"))
 
 set.seed(100)
 
-sim_cont_data(500, noise_x = 5, noise_a = 0)$dat |> 
+sim_cont_data(500, noise_a = 2, true_b = 1)$dat |> 
   arrange(x_meas) |> 
   mutate(id = row_number()) |> 
   ggplot(aes(x = x_meas, y = id)) +
@@ -330,11 +339,11 @@ sim_cont_data(500, noise_x = 5, noise_a = 0)$dat |>
 ```
 :::
 
-While there may exist some backdoor paths through $e^{\theta}$ and $P$ in a hypothetical theory-testing model, I will assume that the outcome of interest, $Y$ is unaffected by anything other than the direct causal effect $\theta^* \longrightarrow Y$.[^3] The purpose of this simplification is to highlight the consequences of random measurement error during parameter estimation of a theory-testing model. Using the generative causal model in @fig-ideal-dag-theory we can simulate data with a known parameter for the effect of group ideal point on the outcome $Y$. Then we fit two linear regression models to estimate this parameter, $\beta$. @eq-cont-no-me-model is the naive theory-testing model where $X_{\text{MEAS},i}$ corresponds to a group's mean ideal point estimate from the Bayesian IRT measurement model (see right panel of @fig-measurement-model). This is in contrast to the joint measurement theory-testing model in @eq-cont-me-model, which models $X_{\text{MEAS},i}$ as an outcome of $X_{\text{TRUE},i}$ (an unobserved parameter for each observation)[^4] and $X_{\text{SE},i}$ which is the observed standard deviation of the posterior distribution for each groups' ideal point. The estimates of $X_{\text{TRUE},i}$ are then used in the linear model which predicts the outcome $y_i$.
+While there may exist some backdoor paths through $e^{\theta}$ and $P$ in a hypothetical theory-testing model, I will assume that the outcome of interest, $Y$ is unaffected by anything other than the direct causal effect $\theta^* \longrightarrow Y$.[^2] The purpose of this simplification is to highlight the consequences of random measurement error during parameter estimation of a theory-testing model. Using the generative causal model in @fig-ideal-dag-theory we can simulate data with a known parameter for the effect of group ideal point on the outcome $Y$. Then we fit two linear regression models to estimate this parameter, $\beta$. @eq-cont-no-me-model is the naive theory-testing model where $X_{\text{MEAS},i}$ corresponds to a group's mean ideal point estimate from the Bayesian IRT measurement model (see right panel of @fig-measurement-model). This is in contrast to the joint measurement theory-testing model in @eq-cont-me-model, which models $X_{\text{MEAS},i}$ as an outcome of $X_{\text{TRUE},i}$ (an unobserved parameter for each observation)[^3] and $X_{\text{SE},i}$ which is the observed standard deviation of the posterior distribution for each groups' ideal point. The estimates of $X_{\text{TRUE},i}$ are then used in the linear model which predicts the outcome $y_i$.
 
-[^3]: In principle, we could close any backdoor paths through $P$ by conditioning on it directly because the level of group participation is directly observed.
+[^2]: In principle, we could close any backdoor paths through $P$ by conditioning on it directly because the level of group participation is directly observed.
 
-[^4]: The parameters $X_{\text{TRUE},i}$ should not be confused with the true ideal points produced in the simulation. These true values are never seen by either model.
+[^3]: The parameters $X_{\text{TRUE},i}$ should not be confused with the true ideal points produced in the simulation. These true values are never seen by either model.
 
 $$
 \begin{aligned}
