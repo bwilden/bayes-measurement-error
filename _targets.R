@@ -204,5 +204,17 @@ list(
       d_ideal = legis_ideal[[1]]$d_vote_pct,
       vote_pct = legis_ideal[[1]]$vote_pct
     )
+  ),
+  tar_stan_mcmc(
+    dems_skew,
+    stan_file = here("stan", "application", "skew.stan"),
+    data = list(
+      N = nrow(legis_ideal[[1]]),
+      mean_ideal = legis_ideal[[1]]$xi,
+      sd_ideal = legis_ideal[[1]]$omega,
+      skew_ideal = legis_ideal[[1]]$alpha,
+      d_ideal = legis_ideal[[1]]$d_vote_pct,
+      vote_pct = legis_ideal[[1]]$vote_pct
+    )
   )
 )
