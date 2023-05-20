@@ -6,9 +6,9 @@ data {
 }
 
 parameters {
-  real alpha;           // intercept
-  real beta;            // slope
-  real<lower=0> sigma;  // outcome noise
+  real alpha;           
+  real beta;           
+  real<lower=0> sigma;  
 }
 
 model {

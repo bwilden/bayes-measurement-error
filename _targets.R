@@ -58,12 +58,12 @@ list(
   ),
   tar_stan_mcmc(
     me_irt,
-    stan_file = here("stan", "me_cont.stan"),
+    stan_file = here("stan", "sim", "me_cont.stan"),
     data = irt_combined_data$stan_list
   ),
   tar_stan_mcmc(
     no_me_irt,
-    stan_file = here("stan", "no_me_cont.stan"),
+    stan_file = here("stan", "sim", "no_me_cont.stan"),
     data = irt_combined_data$stan_list
   ),
   tar_target(
@@ -85,7 +85,7 @@ list(
     map2(map(cont_data, ~.x$stan_list),
          map(cont_data, ~.x$corr_x),
          fit_mcmc_cont,
-         stan_file = here("stan", "me_cont.stan"),
+         stan_file = here("stan", "sim", "me_cont.stan"),
          model_name = "Measurement Error") |> 
       list_rbind()
   ),
@@ -94,7 +94,7 @@ list(
     map2(map(cont_data, ~.x$stan_list),
          map(cont_data, ~.x$corr_x),
          fit_mcmc_cont,
-         stan_file = here("stan", "no_me_cont.stan"),
+         stan_file = here("stan", "sim", "no_me_cont.stan"),
          model_name = "Mean Values Only") |> 
       list_rbind()
   ),
@@ -111,12 +111,12 @@ list(
   ),
   tar_stan_mcmc(
     me_cont_bias,
-    stan_file = here("stan", "skew.stan"),
+    stan_file = here("stan", "sim", "skew.stan"),
     data = bias_data$stan_list
   ),
   tar_stan_mcmc(
     no_me_cont_bias,
-    stan_file = here("stan", "no_me_cont.stan"),
+    stan_file = here("stan", "sim", "no_me_cont.stan"),
     data = bias_data$stan_list
   ),
   tar_target(
@@ -127,7 +127,7 @@ list(
   ),
   tar_stan_mcmc(
     skew_test,
-    stan_file = here("stan", "skewt.stan"),
+    stan_file = here("stan", "sim", "skewt.stan"),
     data = list(N = 10000,
                 x = sn::rsn(10000, xi = 0, omega = 1, alpha = 0.1))
   ),
@@ -181,6 +181,17 @@ list(
     left_join(clean_legis, votes_ideal_dps,
               by = c("icpsr", "congress")) |> 
       left_join(district_pres_votes, by = c("state", "district", "congress")) |> 
+      na.omit() |> 
       group_split(party)
+  ),
+  tar_stan_mcmc(
+    dems,
+    stan_file = here("stan", "application", "no_me.stan"),
+    data = list(
+      N = nrow(legis_ideal[[1]]),
+      mean_ideal = legis_ideal[[1]]$mu,
+      d_ideal = legis_ideal[[1]]$d_vote_pct,
+      vote_pct = legis_ideal[[1]]$vote_pct
+    )
   )
 )
