@@ -1,6 +1,6 @@
 
 data {
-  int<lower=1> N;    
+  int<lower=0> N;    
   vector[N] x_obs;  
   vector[N] control;
   vector[N] y;        

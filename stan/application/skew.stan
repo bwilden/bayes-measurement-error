@@ -19,7 +19,7 @@ parameters {
 }
 
 model {
-  alpha ~ normal(0, 5);
+  alpha ~ normal(50, 5);
   beta1 ~ normal(0, 2);
   beta2 ~ normal(0, 2);
   sigma ~ student_t(3, 0, 2);
