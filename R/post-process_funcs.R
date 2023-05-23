@@ -29,14 +29,38 @@ assemble_sim_irt_results <- function(sim_data, irt_qis, true_beta) {
   
   return(lst(dat, stan_list))
 }
-# summarise_irt_draws(fit_irt)
-# ranef(fit_irt)$group[, , "theta_Intercept"] |> 
-#   as.data.frame() |> 
-#   rownames_to_column()
 
-
-# fit_irt |> 
-#   spread_draws(r_group__theta[group,]) |> 
-#   filter(group %in% 1:10) |> 
-#   ggplot(aes(x = r_group__theta, y = group)) +
-#   geom_halfeyeh()
+assemble_reelection_draws <- function(dems_no_me_draws,
+                                      dems_me_draws,
+                                      reps_no_me_draws,
+                                      reps_me_draws,
+                                      dems_skew_draws,
+                                      reps_skew_draws) {
+  assembled_draws <- rbind(
+    rbind(
+      dems_me_draws |> 
+        dplyr::select("beta1") |> 
+        mutate(model = "Normal ME Model"),
+      dems_no_me_draws |> 
+        dplyr::select("beta1") |> 
+        mutate(model = "MAP Model"),
+      dems_skew_draws |> 
+        dplyr::select("beta1") |> 
+        mutate(model = "Skew-Normal ME Model")
+    ) |> 
+      mutate(party = "Democrat"),
+    rbind(
+      reps_me_draws |> 
+        dplyr::select("beta1") |> 
+        mutate(model = "Normal ME Model"),
+      reps_no_me_draws |> 
+        dplyr::select("beta1") |> 
+        mutate(model = "MAP Model"),
+      reps_skew_draws |> 
+        dplyr::select("beta1") |> 
+        mutate(model = "Skew-Normal ME Model")
+    ) |> 
+      mutate(party = "Republican")
+  )
+  return(assembled_draws)
+}
