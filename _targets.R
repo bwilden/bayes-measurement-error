@@ -149,6 +149,10 @@ list(
     format = "file"
   ),
   tar_target(
+    candidate_vote_totals_file,
+    here::here("data-raw", "1976-2020-house.csv")
+  ),
+  tar_target(
     district_pres_votes,
     pmap_dfr(tibble(district_file = district_files,
                     congress = 103:115),
@@ -164,7 +168,8 @@ list(
         pscl::ideal,
         dropList = list(lop = NA),
         normalize = TRUE,
-        .progress = TRUE)
+        .progress = TRUE,
+        maxiter = 50000, burnin = 25000)
   ),
   tar_target(
     votes_ideal_dps,
@@ -177,11 +182,16 @@ list(
     prep_legis(raw_legis)
   ),
   tar_target(
+    clean_candidate_votes,
+    prep_candidates(candidate_vote_totals_file)
+  ),
+  tar_target(
     legis_ideal,
-    left_join(clean_legis, votes_ideal_dps,
-              by = c("icpsr", "congress")) |> 
-      left_join(district_pres_votes, by = c("state", "district", "congress")) |> 
-      na.omit() |> 
+    clean_candidate_votes |> 
+      left_join(district_pres_votes, by = c("congress", "district", "state")) |> 
+      left_join(clean_legis, by = c("congress", "party", "state", "district")) |> 
+      left_join(votes_ideal_dps, by = c("icpsr", "congress")) |>
+      na.omit() |>
       group_split(party)
   ),
   tar_stan_mcmc(
@@ -189,9 +199,9 @@ list(
     stan_file = here("stan", "application", "no_me.stan"),
     data = list(
       N = nrow(legis_ideal[[1]]),
-      mean_ideal = legis_ideal[[1]]$mu,
-      d_ideal = legis_ideal[[1]]$d_vote_pct,
-      vote_pct = legis_ideal[[1]]$vote_pct
+      x_obs = legis_ideal[[1]]$mu,
+      control = legis_ideal[[1]]$r_vote_pct,
+      y = legis_ideal[[1]]$vote_pct
     )
   ),
   tar_stan_mcmc(
@@ -199,22 +209,43 @@ list(
     stan_file = here("stan", "application", "me.stan"),
     data = list(
       N = nrow(legis_ideal[[1]]),
-      mean_ideal = legis_ideal[[1]]$mu,
-      sd_ideal = legis_ideal[[1]]$sigma,
-      d_ideal = legis_ideal[[1]]$d_vote_pct,
-      vote_pct = legis_ideal[[1]]$vote_pct
+      x_obs = legis_ideal[[1]]$mu,
+      x_sd = legis_ideal[[1]]$sigma,
+      control = legis_ideal[[1]]$r_vote_pct,
+      y = legis_ideal[[1]]$vote_pct
     )
   ),
   tar_stan_mcmc(
-    dems_skew,
-    stan_file = here("stan", "application", "skew.stan"),
+    reps,
+    stan_file = here("stan", "application", "no_me.stan"),
     data = list(
-      N = nrow(legis_ideal[[1]]),
-      mean_ideal = legis_ideal[[1]]$xi,
-      sd_ideal = legis_ideal[[1]]$omega,
-      skew_ideal = legis_ideal[[1]]$alpha,
-      d_ideal = legis_ideal[[1]]$d_vote_pct,
-      vote_pct = legis_ideal[[1]]$vote_pct
+      N = nrow(legis_ideal[[2]]),
+      x_obs = legis_ideal[[2]]$mu,
+      control = legis_ideal[[2]]$r_vote_pct,
+      y = legis_ideal[[2]]$vote_pct
+    )
+  ),
+  tar_stan_mcmc(
+    reps_me,
+    stan_file = here("stan", "application", "me.stan"),
+    data = list(
+      N = nrow(legis_ideal[[2]]),
+      x_obs = legis_ideal[[2]]$mu,
+      x_sd = legis_ideal[[2]]$sigma,
+      control = legis_ideal[[2]]$r_vote_pct,
+      y = legis_ideal[[2]]$vote_pct
     )
   )
+  # tar_stan_mcmc(
+  #   dems_skew,
+  #   stan_file = here("stan", "application", "skew.stan"),
+  #   data = list(
+  #     N = nrow(legis_ideal[[1]]),
+  #     x_obs = legis_ideal[[1]]$mu,
+  #     x_sd = legis_ideal[[1]]$omega,
+  #     x_skew = legis_ideal[[1]]$alpha,
+  #     control = legis_ideal[[1]]$d_vote_pct,
+  #     y = legis_ideal[[1]]$vote_pct
+  #   )
+  # )
 )
