@@ -34,15 +34,12 @@ process_ideal_points <- function(ideal_obj, congress) {
     pivot_longer(cols = everything(),
                  names_to = "icpsr",
                  values_to = "ideal_point") |> 
-    nest_by(icpsr) |> 
-    mutate(normal_mod = list(selm(ideal_point ~ 1, data = data, fixed.param = list(alpha = 0))),
-           normal_dp = list(extractSECdistr(normal_mod)),
-           # Normal dps
-           mu = slot(normal_dp, "dp")[["xi"]],
-           sigma = slot(normal_dp, "dp")[["omega"]],
-           skew_mod = list(selm(ideal_point ~ 1, data = data)),
+    group_by(icpsr) |> 
+    mutate(mu = mean(ideal_point),
+           sigma = sd(ideal_point)) |> 
+    nest_by() |> 
+    mutate(skew_mod = list(selm(ideal_point ~ 1, data = data)),
            skew_dp = list(extractSECdistr(skew_mod)),
-           # Skew normal dps
            xi = slot(skew_dp, "dp")[["xi"]],
            omega = slot(skew_dp, "dp")[["omega"]],
            alpha = slot(skew_dp, "dp")[["alpha"]]) |> 
@@ -50,9 +47,24 @@ process_ideal_points <- function(ideal_obj, congress) {
     dplyr::select(icpsr, mu, sigma, xi, omega, alpha) |> 
     distinct() |> 
     mutate(icpsr = str_remove(icpsr, ".D1"),
-           congress := congress)
+           # Legis ideal needs to merge with following year election data
+           congress := congress + 1)
   return(ideal_summaries)
 }
+
+prep_candidates <- function(candidate_file) {
+  cands <- read_csv(candidate_file) |> 
+    filter(party %in% c("DEMOCRAT", "REPUBLICAN")) |> 
+    mutate(party = ifelse(party == "DEMOCRAT", "D", "R"),
+           vote_pct = (candidatevotes / totalvotes) * 100,
+           district = as.numeric(gsub("^0+", "", district)),
+           district = ifelse(is.na(district), 1, district),
+           congress = ceiling(year / 2) - 893) |> 
+    select(state = state_po, party, vote_pct, district, congress, year)
+  
+  return(cands)
+}
+# prep_candidates(here::here("data-raw", "1976-2020-house.csv")) 
 
 prep_legis <- function(legis_file) {
   legis <- readxl::read_xls(legis_file) |> 
@@ -64,7 +76,6 @@ prep_legis <- function(legis_file) {
     dplyr::select(icpsr, party,
                   congress = congress_number,
                   female = x1_female,
-                  vote_pct = percent_vote_received_to_enter_this_congress,
                   state = two_letter_state_code,
                   district = congressional_district_number)
   
@@ -91,3 +102,4 @@ prep_district_presidential_votes <- function(district_file, congress) {
   
   return(districts)
 }
+
