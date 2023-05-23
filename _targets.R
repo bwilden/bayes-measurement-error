@@ -195,14 +195,13 @@ list(
       group_split(party)
   ),
   tar_stan_mcmc(
-    dems,
+    dems_no_me,
     stan_file = here("stan", "application", "no_me.stan"),
     data = list(
       N = nrow(legis_ideal[[1]]),
       x_obs = legis_ideal[[1]]$mu,
       control = legis_ideal[[1]]$r_vote_pct,
-      y = legis_ideal[[1]]$vote_pct
-    )
+      y = legis_ideal[[1]]$vote_pct)
   ),
   tar_stan_mcmc(
     dems_me,
@@ -212,18 +211,16 @@ list(
       x_obs = legis_ideal[[1]]$mu,
       x_sd = legis_ideal[[1]]$sigma,
       control = legis_ideal[[1]]$r_vote_pct,
-      y = legis_ideal[[1]]$vote_pct
-    )
+      y = legis_ideal[[1]]$vote_pct)
   ),
   tar_stan_mcmc(
-    reps,
+    reps_no_me,
     stan_file = here("stan", "application", "no_me.stan"),
     data = list(
       N = nrow(legis_ideal[[2]]),
       x_obs = legis_ideal[[2]]$mu,
       control = legis_ideal[[2]]$r_vote_pct,
-      y = legis_ideal[[2]]$vote_pct
-    )
+      y = legis_ideal[[2]]$vote_pct)
   ),
   tar_stan_mcmc(
     reps_me,
@@ -233,19 +230,46 @@ list(
       x_obs = legis_ideal[[2]]$mu,
       x_sd = legis_ideal[[2]]$sigma,
       control = legis_ideal[[2]]$r_vote_pct,
-      y = legis_ideal[[2]]$vote_pct
-    )
+      y = legis_ideal[[2]]$vote_pct)
+  ),
+  tar_stan_mcmc(
+    dems_skew,
+    stan_file = here("stan", "application", "skew.stan"),
+    data = list(
+      N = nrow(legis_ideal[[1]]),
+      x_obs = legis_ideal[[1]]$mu,
+      x_sd = legis_ideal[[1]]$omega,
+      x_skew = legis_ideal[[1]]$alpha,
+      control = legis_ideal[[1]]$r_vote_pct,
+      y = legis_ideal[[1]]$vote_pct),
+    init = 0
+  ),
+  tar_stan_mcmc(
+    reps_skew,
+    stan_file = here("stan", "application", "skew.stan"),
+    data = list(
+      N = nrow(legis_ideal[[2]]),
+      x_obs = legis_ideal[[2]]$mu,
+      x_sd = legis_ideal[[2]]$omega,
+      x_skew = legis_ideal[[2]]$alpha,
+      control = legis_ideal[[2]]$r_vote_pct,
+      y = legis_ideal[[2]]$vote_pct),
+    init = 0
+  ),
+  tar_target(
+    reelection_draws,
+    assemble_reelection_draws(dems_no_me_draws_no_me,
+                              dems_me_draws_me,
+                              reps_no_me_draws_no_me,
+                              reps_me_draws_me,
+                              dems_skew_draws_skew,
+                              reps_skew_draws_skew)
+  ),
+  tar_target(
+    reelection_coef_plot,
+    compare_reelection_coefs(dem_no_me_draws = dems_draws_no_me,
+                             dem_me_draws = dems_me_draws_me,
+                             rep_no_me_draws = reps_draws_no_me,
+                             rep_me_draws = reps_me_draws_me)
   )
-  # tar_stan_mcmc(
-  #   dems_skew,
-  #   stan_file = here("stan", "application", "skew.stan"),
-  #   data = list(
-  #     N = nrow(legis_ideal[[1]]),
-  #     x_obs = legis_ideal[[1]]$mu,
-  #     x_sd = legis_ideal[[1]]$omega,
-  #     x_skew = legis_ideal[[1]]$alpha,
-  #     control = legis_ideal[[1]]$d_vote_pct,
-  #     y = legis_ideal[[1]]$vote_pct
-  #   )
-  # )
 )
