@@ -1,5 +1,5 @@
 ---
-title: "How to Deal With Measurement Error in Measurement Models"
+title: "Going Beyond Ideal Point Points: Modeling Measurement Model Measurement Error"
 author: "Bertrand Wilden"
 date: "`r Sys.Date()`"
 format:
@@ -56,6 +56,7 @@ knitr::write_bib(.packages(), "packages.bib")
     }
 }
 ```
+
 # Introduction
 
 Variables of interest in the social sciences are often things we cannot directly observe or measure. Examples include the level of democracy or corruption in a country, or the political ideology of an individual or group. Latent variables such as these must be inferred through indirect processes. One common method is to build statistical models which purport to estimate latent variables using observable input data. I will refer to these as *measurement models*. The outputs of measurement models are then used in subsequent inference procedures to test substantive theories in social science. I will refer to this set of models as *theory-testing models*.
@@ -70,13 +71,15 @@ Theory-testing research which uses these two measurement models typically reduce
 #| label: fig-measurement-model
 #| fig-cap: "Ignoring Measurement Error in Measurement Models"
 N <- 100000
-tibble(x = c(rnorm(N, sd = 1.5),
-             rnorm(N, sd = 4),
-             sn::rsn(N, alpha = -4, omega = 4, xi = 3)),
-       y = c(rep("a", N), rep("b", N), rep("c", N))) |> 
+tibble(x = c(rnorm(N, sd = 1),
+             rnorm(N, sd = 2),
+             sn::rsn(N, alpha = -4, omega = 2, xi = 1.5),
+             sn::rst(N, xi = -2.75, omega = 2, alpha = 4, nu = 1)),
+       y = c(rep("a", N), rep("b", N), rep("c", N), rep("d", N))) |> 
   ggplot(aes(x = x)) +
   geom_density(color = "black", fill = "darkcyan", alpha = .5) +
-  facet_wrap(~ y, nrow = 1) +
+  facet_wrap(~ y, nrow = 2) +
+  xlim(-6, 6) +
   theme_void()
 ```
 
