@@ -124,4 +124,31 @@ compare_coefs <- function(me_draws, no_me_draws, true) {
   
   return(p)
 }
-# compare_irt_coefs(me_irt_draws_me_cont, no_me_irt_draws_no_me_cont)
+
+
+# House Reelection Plots --------------------------------------------------
+
+compare_reelection_coefs <- function(draws) {
+  p <- draws |>
+    ggplot(aes(x = beta1, y = model)) +
+    stat_slabinterval(fill = met.brewer("Isfahan1", 1), 
+                      alpha = .75, size = 3, fatten_point = 2) +
+    labs(x = "Coefficient Estimate", y = "") +
+    geom_vline(xintercept = 0,
+               linetype = "dashed",
+               color = "grey",
+               size = 1.25) +
+    facet_wrap(~ party, nrow = 2) +
+    theme_ggdist() 
+  
+  return(p)
+}
+# compare_reelection_coefs(dem_no_me_draws = dems_draws_no_me,
+#                          dem_me_draws = dems_me_draws_me,
+#                          rep_no_me_draws = reps_draws_no_me,
+#                          rep_me_draws = reps_me_draws_me)
+# 
+# tar_load(dems_draws_no_me)
+# tar_load(dems_me_draws_me)
+# tar_load(reps_draws_no_me)
+# tar_load(reps_me_draws_me)
