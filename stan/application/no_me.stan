@@ -1,9 +1,9 @@
 
 data {
   int<lower=1> N;    
-  vector[N] mean_ideal;  
-  vector[N] d_ideal;
-  vector[N] vote_pct;        
+  vector[N] x_obs;  
+  vector[N] control;
+  vector[N] y;        
 }
 
 parameters {
@@ -19,5 +19,5 @@ model {
   beta2 ~ normal(0, 2);
   sigma ~ student_t(3, 0, 2);
   
-  vote_pct ~ normal(alpha + beta1 * mean_ideal + beta2 * d_ideal, sigma);
+  y ~ normal(alpha + beta1 * x_obs + beta2 * control, sigma);
 }

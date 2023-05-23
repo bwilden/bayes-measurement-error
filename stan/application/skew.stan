@@ -1,11 +1,11 @@
 
 data {
   int<lower=1> N;    
-  array[N] real mean_ideal; 
-  array[N] real<lower=0> sd_ideal;   
-  array[N] real skew_ideal;
-  array[N] real d_ideal;
-  vector[N] vote_pct;
+  array[N] real x_obs; 
+  array[N] real<lower=0> x_sd;   
+  array[N] real x_skew;
+  array[N] real control;
+  vector[N] y;
 }
 
 parameters {
@@ -13,13 +13,13 @@ parameters {
   real beta1;
   real beta2;            
   real<lower=0> sigma;
-  array[N] real ideal;       
+  array[N] real x;       
   real<lower=0> tau;
   real mu;
 }
 
 model {
-  alpha ~ normal(50, 5);
+  alpha ~ normal(0, 5);
   beta1 ~ normal(0, 2);
   beta2 ~ normal(0, 2);
   sigma ~ student_t(3, 0, 2);
@@ -28,8 +28,8 @@ model {
   to_vector(x) ~ normal(mu, tau);
   
   for (i in 1:N) {
-    mean_ideal[i] ~ skew_normal(ideal[i], sd_ideal[i], skew_ideal[i]);
+    x_obs[i] ~ skew_normal(x[i], x_sd[i], x_skew[i]);
         
-    vote_pct[i] ~ normal(alpha + beta1 * ideal[i] + beta2 * d_ideal[i], sigma);
+    y[i] ~ normal(alpha + beta1 * x[i] + beta2 * control[i], sigma);
   }
 }
