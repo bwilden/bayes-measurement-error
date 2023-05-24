@@ -160,11 +160,33 @@ list(
   ),
   tar_target(
     votes_rc,
-    prep_votes_rc(raw_votes)
+    prep_votes_rc(raw_votes, raw_legis)
+  ),
+  tar_target(
+    votes_irt,
+    pmap(tibble(data = votes_rc$votes_list),
+        brm,
+        formula = bf(yea ~ gamma * theta + beta,
+                theta ~ (1 | icpsr),
+                beta ~ (1 | rollnumber),
+                gamma ~ republican + (1 | rollnumber),
+                nl = TRUE),
+        family = bernoulli(link = "probit"),
+        prior = prior(normal(0, 1), class = b, nlpar = beta) +
+          prior(normal(0, 1), class = b, nlpar = theta) +
+          prior(normal(0, 1), class = b, nlpar = gamma) +
+          prior(exponential(2), class = sd, nlpar = theta) +
+          prior(exponential(2), class = sd, nlpar = gamma) +
+          prior(exponential(2), class = sd, nlpar = beta) +
+          prior(lognormal(0, .5), class = b, coef = republican, nlpar = gamma),
+        chains = 4,
+        cores = 8,
+        backend = "cmdstanr",
+        threads = 2)
   ),
   tar_target(
     votes_ideal,
-    map(votes_rc,
+    map(votes_rc$votes_list_rc,
         pscl::ideal,
         dropList = list(lop = NA),
         normalize = TRUE,
