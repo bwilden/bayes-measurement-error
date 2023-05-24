@@ -1,5 +1,15 @@
 
-prep_votes_rc <- function(votes_file) {
+prep_votes_rc <- function(votes_file, legis_file) {
+  legis_party <- readxl::read_xls(legis_file) |> 
+    janitor::clean_names() |> 
+    mutate(republican = ifelse(x100_dem_200_rep_other == 200, 1, 0),
+           icpsr = as.character(icpsr_number_according_to_poole_and_rosenthal)) |> 
+    dplyr::select(icpsr, republican) |> 
+    distinct() |> 
+    # sorry party switchers--you are deleted
+    group_by(icpsr) |> 
+    filter(n() == 1)
+  
   votes <- read_csv(votes_file) |> 
     # Subset to congresses in house member data set
     filter(congress %in% 93:117) |> 
@@ -8,7 +18,8 @@ prep_votes_rc <- function(votes_file) {
                            .default = NA),
            icpsr = as.character(icpsr)) |> 
     filter(!is.na(yea)) |> 
-    dplyr::select(congress, rollnumber, icpsr, yea)
+    dplyr::select(congress, rollnumber, icpsr, yea) |> 
+    left_join(legis_party, by = "icpsr")
   
   # List element for each congress
   votes_list <- split(votes, votes$congress)
@@ -25,7 +36,7 @@ prep_votes_rc <- function(votes_file) {
                                legis.names = map(votes_list_wide, ~.x$icpsr)),
                         pscl::rollcall)
   
-  return(votes_list_rc)
+  return(lst(votes_list_rc, votes_list))
 }
 
 
