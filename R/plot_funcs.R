@@ -132,12 +132,13 @@ compare_reelection_coefs <- function(draws) {
   p <- draws |>
     ggplot(aes(x = beta1, y = model)) +
     stat_slabinterval(fill = met.brewer("Isfahan1", 1), 
-                      alpha = .75, size = 3, fatten_point = 2) +
+                      alpha = .75, size = 3, fatten_point = 2,
+                      .width = .89) +
     labs(x = "Coefficient Estimate", y = "") +
     geom_vline(xintercept = 0,
                linetype = "dashed",
                color = "grey",
-               size = 1.25) +
+               size = 1) +
     facet_wrap(~ party, nrow = 2) +
     theme_ggdist() 
   
