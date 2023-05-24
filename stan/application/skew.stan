@@ -5,7 +5,7 @@ data {
   array[N] real<lower=0> x_sd;   
   array[N] real x_skew;
   array[N] real control;
-  vector[N] y;
+  array[N] real y;
 }
 
 parameters {
@@ -19,11 +19,13 @@ parameters {
 }
 
 model {
-  alpha ~ normal(50, 5);
-  beta1 ~ normal(0, 2);
-  beta2 ~ normal(0, 2);
-  sigma ~ student_t(3, 0, 2);
-  tau ~ student_t(3, 0, 2);
+  alpha ~ normal(50, 10);
+  beta1 ~ normal(0, 5);
+  beta2 ~ normal(0, 5);
+  // sigma ~ student_t(30, 0, 2);
+  // tau ~ student_t(30, 0, 2);
+  sigma ~ exponential(1);
+  tau ~ exponential(1);
   mu ~ normal(0, 1);
   to_vector(x) ~ normal(mu, tau);
   

@@ -143,12 +143,3 @@ compare_reelection_coefs <- function(draws) {
   
   return(p)
 }
-# compare_reelection_coefs(dem_no_me_draws = dems_draws_no_me,
-#                          dem_me_draws = dems_me_draws_me,
-#                          rep_no_me_draws = reps_draws_no_me,
-#                          rep_me_draws = reps_me_draws_me)
-# 
-# tar_load(dems_draws_no_me)
-# tar_load(dems_me_draws_me)
-# tar_load(reps_draws_no_me)
-# tar_load(reps_me_draws_me)
