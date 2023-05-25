@@ -31,47 +31,47 @@ true_b = 1
 
 list(
   # IRT simulation
-  tar_target(
-    irt_data,
-    sim_irt_data(n_groups = 200, n_items = 200)
-  ),
-  tar_target(
-    fit_irt,
-    fit_brms_irt(irt_data$dat |> 
-                   filter(participate == 1))
-  ),
-  tar_target(
-    irt_qis,
-    summarise_irt_draws(fit_irt)
-  ),
-  tar_target(
-    theta_check_plot,
-    create_theta_check_plot(irt_data$dat, irt_qis)
-  ),
-  tar_target(
-    theta_dist_plot,
-    create_theta_dist_plot(irt_qis)
-  ),
-  tar_target(
-    irt_combined_data,
-    assemble_sim_irt_results(irt_data$dat, irt_qis, true_beta = 1)
-  ),
-  tar_stan_mcmc(
-    me_irt,
-    stan_file = here("stan", "sim", "me_cont.stan"),
-    data = irt_combined_data$stan_list
-  ),
-  tar_stan_mcmc(
-    no_me_irt,
-    stan_file = here("stan", "sim", "no_me_cont.stan"),
-    data = irt_combined_data$stan_list
-  ),
-  tar_target(
-    irt_coef_plot,
-    compare_coefs(me_irt_draws_me_cont, 
-                  no_me_irt_draws_no_me_cont,
-                  true = true_b)
-  ),
+  # tar_target(
+  #   irt_data,
+  #   sim_irt_data(n_groups = 200, n_items = 200)
+  # ),
+  # tar_target(
+  #   fit_irt,
+  #   fit_brms_irt(irt_data$dat |> 
+  #                  filter(participate == 1))
+  # ),
+  # tar_target(
+  #   irt_qis,
+  #   summarise_irt_draws(fit_irt)
+  # ),
+  # tar_target(
+  #   theta_check_plot,
+  #   create_theta_check_plot(irt_data$dat, irt_qis)
+  # ),
+  # tar_target(
+  #   theta_dist_plot,
+  #   create_theta_dist_plot(irt_qis)
+  # ),
+  # tar_target(
+  #   irt_combined_data,
+  #   assemble_sim_irt_results(irt_data$dat, irt_qis, true_beta = 1)
+  # ),
+  # tar_stan_mcmc(
+  #   me_irt,
+  #   stan_file = here("stan", "sim", "me_cont.stan"),
+  #   data = irt_combined_data$stan_list
+  # ),
+  # tar_stan_mcmc(
+  #   no_me_irt,
+  #   stan_file = here("stan", "sim", "no_me_cont.stan"),
+  #   data = irt_combined_data$stan_list
+  # ),
+  # tar_target(
+  #   irt_coef_plot,
+  #   compare_coefs(me_irt_draws_me_cont, 
+  #                 no_me_irt_draws_no_me_cont,
+  #                 true = true_b)
+  # ),
   # Random noise ME
   tar_target(
     cont_data,
@@ -160,29 +160,12 @@ list(
   ),
   tar_target(
     votes_rc,
-    prep_votes_rc(raw_votes, raw_legis)
+    prep_votes_rc(raw_votes, raw_legis, congress_list = 102:117)
   ),
   tar_target(
     votes_irt,
-    pmap(tibble(data = votes_rc$votes_list),
-        brm,
-        formula = bf(yea ~ gamma * theta + beta,
-                theta ~ (1 | icpsr),
-                beta ~ (1 | rollnumber),
-                gamma ~ republican + (1 | rollnumber),
-                nl = TRUE),
-        family = bernoulli(link = "probit"),
-        prior = prior(normal(0, 1), class = b, nlpar = beta) +
-          prior(normal(0, 1), class = b, nlpar = theta) +
-          prior(normal(0, 1), class = b, nlpar = gamma) +
-          prior(exponential(2), class = sd, nlpar = theta) +
-          prior(exponential(2), class = sd, nlpar = gamma) +
-          prior(exponential(2), class = sd, nlpar = beta) +
-          prior(lognormal(0, .5), class = b, coef = republican, nlpar = gamma),
-        chains = 4,
-        cores = 8,
-        backend = "cmdstanr",
-        threads = 2)
+    map(votes_rc$votes_list,
+        fit_brms_irt)
   ),
   tar_target(
     votes_ideal,
@@ -195,7 +178,7 @@ list(
   ),
   tar_target(
     votes_ideal_dps,
-    pmap_dfr(tibble(ideal_obj = votes_ideal, congress = 93:117),
+    pmap_dfr(tibble(ideal_obj = votes_ideal, congress = 102:117),
              process_ideal_points,
              .progress = TRUE)
   ),
