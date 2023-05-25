@@ -1,5 +1,5 @@
 
-prep_votes_rc <- function(votes_file, legis_file) {
+prep_votes_rc <- function(votes_file, legis_file, congress_list) {
   legis_party <- readxl::read_xls(legis_file) |> 
     janitor::clean_names() |> 
     mutate(republican = ifelse(x100_dem_200_rep_other == 200, 1, 0),
@@ -12,12 +12,20 @@ prep_votes_rc <- function(votes_file, legis_file) {
   
   votes <- read_csv(votes_file) |> 
     # Subset to congresses in house member data set
-    filter(congress %in% 93:117) |> 
+    filter(congress %in% congress_list) |> 
     mutate(yea = case_when(cast_code %in% 1:3 ~ 1,
                            cast_code %in% 4:6 ~ 0,
                            .default = NA),
-           icpsr = as.character(icpsr)) |> 
+           icpsr = as.character(icpsr),
+           rollnumber = as.character(rollnumber)) |> 
     filter(!is.na(yea)) |> 
+    group_by(rollnumber) |> 
+    mutate(pct_yes = mean(yea == 1)) |> 
+    # get rid of unanimous votes
+    filter(pct_yes > .2 & pct_yes < .8) |> 
+    group_by(congress) |> 
+    filter(rollnumber %in% sample(unique(rollnumber), 50)) |>
+    ungroup() |> 
     dplyr::select(congress, rollnumber, icpsr, yea) |> 
     left_join(legis_party, by = "icpsr")
   
