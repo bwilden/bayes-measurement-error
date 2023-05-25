@@ -162,11 +162,15 @@ list(
     votes_rc,
     prep_votes_rc(raw_votes, raw_legis, congress_list = 102:117)
   ),
-  tar_target(
-    votes_irt,
-    map(votes_rc$votes_list,
-        fit_brms_irt)
-  ),
+  # tar_target(
+  #   votes_irt,
+  #   map(votes_rc$votes_list,
+  #       fit_brms_irt)
+  # ),
+  # tar_target(
+  #   votes_irt,
+  #   fit_brms_irt(votes_rc$votes_list[[1]])
+  # ),
   tar_target(
     votes_ideal,
     map(votes_rc$votes_list_rc,

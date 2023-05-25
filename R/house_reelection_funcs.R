@@ -22,9 +22,9 @@ prep_votes_rc <- function(votes_file, legis_file, congress_list) {
     group_by(rollnumber) |> 
     mutate(pct_yes = mean(yea == 1)) |> 
     # get rid of unanimous votes
-    filter(pct_yes > .2 & pct_yes < .8) |> 
-    group_by(congress) |> 
-    filter(rollnumber %in% sample(unique(rollnumber), 50)) |>
+    filter(pct_yes > .1 & pct_yes < .9) |> 
+    # group_by(congress) |> 
+    # filter(rollnumber %in% sample(unique(rollnumber), 25)) |>
     ungroup() |> 
     dplyr::select(congress, rollnumber, icpsr, yea) |> 
     left_join(legis_party, by = "icpsr")
