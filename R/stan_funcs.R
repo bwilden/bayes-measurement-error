@@ -13,19 +13,20 @@ fit_mcmc_cont <- function(stan_file, data_list, corr_x, model_name) {
 fit_brms_irt <- function(data_df) {
   fit <- brm(
     bf(yea ~ gamma * theta + beta,
-       theta ~ (1 | icpsr),
-       beta ~ (1 | rollnumber),
-       gamma ~ republican + (1 | rollnumber),
+       theta ~ 0 + icpsr,
+       beta ~ 0 + rollnumber,
+       gamma ~ 0 + republican + rollnumber,
        nl = TRUE),
     data = data_df,
     family = bernoulli(link = "probit"),
-    prior = prior(normal(0, 2), class = b, nlpar = beta) +
-      prior(normal(0, 2), class = b, nlpar = theta) +
+    prior = 
+      prior(normal(0, 2), class = b, nlpar = beta) +
+      prior(normal(0, 1), class = b, nlpar = theta) +
       prior(normal(0, 2), class = b, nlpar = gamma) +
-      prior(exponential(1), class = sd, nlpar = theta) +
-      prior(constant(1), class = sd, nlpar = gamma) +
-      prior(exponential(1), class = sd, nlpar = beta) +
-      prior(lognormal(0, .5), class = b, coef = republican, nlpar = gamma),
+      # prior(cauchy(0, 2), class = sd, nlpar = theta) +
+      # prior(constant(1), class = sd, nlpar = gamma) +
+      # prior(cauchy(0, 2), class = sd, nlpar = beta) +
+      prior(constant(.5), class = b, coef = republican, nlpar = gamma),
     chains = 4,
     cores = 8,
     iter = 2000,
