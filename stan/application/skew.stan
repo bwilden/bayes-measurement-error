@@ -1,4 +1,3 @@
-
 data {
   int<lower=1> N;    
   array[N] real x_obs; 
@@ -22,16 +21,13 @@ model {
   alpha ~ normal(50, 10);
   beta1 ~ normal(0, 5);
   beta2 ~ normal(0, 5);
-  // sigma ~ student_t(30, 0, 2);
-  // tau ~ student_t(30, 0, 2);
-  sigma ~ exponential(1);
-  tau ~ exponential(1);
+  sigma ~ student_t(5, 0, 2);
+  tau ~ student_t(5, 0, 2);
   mu ~ normal(0, 1);
   to_vector(x) ~ normal(mu, tau);
-  
+
   for (i in 1:N) {
     x_obs[i] ~ skew_normal(x[i], x_sd[i], x_skew[i]);
-        
     y[i] ~ normal(alpha + beta1 * x[i] + beta2 * control[i], sigma);
   }
 }
