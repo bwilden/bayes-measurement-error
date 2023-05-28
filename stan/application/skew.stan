@@ -1,33 +1,37 @@
 data {
-  int<lower=1> N;    
+  int<lower=1> N;
   array[N] real x_obs; 
   array[N] real<lower=0> x_sd;   
   array[N] real x_skew;
-  array[N] real control;
+  vector[N] control;
   array[N] real y;
 }
 
 parameters {
-  real alpha;
+  real beta0;
   real beta1;
   real beta2;            
-  real<lower=0> sigma;
-  array[N] real x;       
-  real<lower=0> tau;
-  real mu;
+  real<lower=0> sigma_y;
+  vector[N] x;   
+  real<lower=0> tau;     
+  real mu_x;  
 }
 
 model {
-  alpha ~ normal(50, 10);
-  beta1 ~ normal(0, 5);
-  beta2 ~ normal(0, 5);
-  sigma ~ student_t(5, 0, 2);
-  tau ~ student_t(5, 0, 2);
-  mu ~ normal(0, 1);
-  to_vector(x) ~ normal(mu, tau);
+  mu_x ~ normal(0, 2);
+  tau ~ cauchy(0, 3);
+  to_vector(x) ~ normal(mu_x, tau);
+  
+  vector[N] mu;
+  
+  mu = beta0 + beta1 * x + beta2 * control;
+  x_obs ~ skew_normal(x, x_sd, x_skew);
 
-  for (i in 1:N) {
-    x_obs[i] ~ skew_normal(x[i], x_sd[i], x_skew[i]);
-    y[i] ~ normal(alpha + beta1 * x[i] + beta2 * control[i], sigma);
-  }
+  beta0 ~ normal(50, 5);
+  beta1 ~ normal(0, 2);
+  beta2 ~ normal(0, 2);
+  
+  sigma_y ~ cauchy(0, 3);
+  
+  y ~ normal(mu, sigma_y);
 }
