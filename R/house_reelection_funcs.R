@@ -22,9 +22,9 @@ prep_votes_rc <- function(votes_file, legis_file, congress_list) {
     group_by(rollnumber) |> 
     mutate(pct_yes = mean(yea == 1)) |> 
     # get rid of unanimous votes
-    filter(pct_yes > .1 & pct_yes < .9) |> 
-    # group_by(congress) |> 
-    # filter(rollnumber %in% sample(unique(rollnumber), 25)) |>
+    filter(pct_yes > .3 & pct_yes < .7) |> 
+    group_by(congress) |>
+    filter(rollnumber %in% sample(unique(rollnumber), 75)) |>
     ungroup() |> 
     dplyr::select(congress, rollnumber, icpsr, yea) |> 
     left_join(legis_party, by = "icpsr")
@@ -53,11 +53,15 @@ process_ideal_points <- function(ideal_obj, congress) {
     pivot_longer(cols = everything(),
                  names_to = "icpsr",
                  values_to = "ideal_point") |> 
-    group_by(icpsr) |> 
-    mutate(mu = mean(ideal_point),
-           sigma = sd(ideal_point)) |> 
+    group_by(icpsr) |>
+    # mutate(mu = mean(ideal_point),
+    #        sigma = sd(ideal_point)) |>
     nest_by() |> 
-    mutate(skew_mod = list(selm(ideal_point ~ 1, data = data)),
+    mutate(lm_mod = list(selm(ideal_point ~ 1, data = data, fixed.param = list(alpha = 0))),
+           lm_dp = list(extractSECdistr(lm_mod)),
+           mu = slot(lm_dp, "dp")[["xi"]],
+           sigma = slot(lm_dp, "dp")[["omega"]],
+           skew_mod = list(selm(ideal_point ~ 1, data = data)),
            skew_dp = list(extractSECdistr(skew_mod)),
            xi = slot(skew_dp, "dp")[["xi"]],
            omega = slot(skew_dp, "dp")[["omega"]],
