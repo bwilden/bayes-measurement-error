@@ -162,11 +162,11 @@ list(
     votes_rc,
     prep_votes_rc(raw_votes, raw_legis, congress_list = 102:117)
   ),
-  # tar_target(
-  #   votes_irt,
-  #   map(votes_rc$votes_list,
-  #       fit_brms_irt)
-  # ),
+  tar_target(
+    votes_irt,
+    map(votes_rc$votes_list,
+        fit_brms_irt)
+  ),
   # tar_target(
   #   votes_irt,
   #   fit_brms_irt(votes_rc$votes_list[[1]])
@@ -178,7 +178,7 @@ list(
         dropList = list(lop = NA),
         normalize = TRUE,
         .progress = TRUE,
-        maxiter = 50000, burnin = 25000)
+        maxiter = 25000, burnin = 10000)
   ),
   tar_target(
     votes_ideal_dps,
@@ -208,10 +208,6 @@ list(
     stan_file = here("stan", "application", "no_me.stan"),
     data = list(
       N = nrow(legis_ideal[[1]]),
-      N_legis = length(unique(legis_ideal[[1]]$icpsr)),
-      legis = as.numeric(as.factor(legis_ideal[[1]]$icpsr)),
-      N_year = length(unique(legis_ideal[[1]]$congress)),
-      year = as.numeric(as.factor(legis_ideal[[1]]$congress)),
       x_obs = legis_ideal[[1]]$mu,
       control = legis_ideal[[1]]$r_vote_pct,
       y = legis_ideal[[1]]$vote_pct)
@@ -221,10 +217,6 @@ list(
     stan_file = here("stan", "application", "me.stan"),
     data = list(
       N = nrow(legis_ideal[[1]]),
-      N_legis = length(unique(legis_ideal[[1]]$icpsr)),
-      legis = as.numeric(as.factor(legis_ideal[[1]]$icpsr)),
-      N_year = length(unique(legis_ideal[[1]]$congress)),
-      year = as.numeric(as.factor(legis_ideal[[1]]$congress)),
       x_obs = legis_ideal[[1]]$mu,
       x_sd = legis_ideal[[1]]$sigma,
       control = legis_ideal[[1]]$r_vote_pct,
@@ -235,10 +227,6 @@ list(
     stan_file = here("stan", "application", "no_me.stan"),
     data = list(
       N = nrow(legis_ideal[[2]]),
-      N_legis = length(unique(legis_ideal[[2]]$icpsr)),
-      legis = as.numeric(as.factor(legis_ideal[[2]]$icpsr)),
-      N_year = length(unique(legis_ideal[[2]]$congress)),
-      year = as.numeric(as.factor(legis_ideal[[2]]$congress)),
       x_obs = legis_ideal[[2]]$mu,
       control = legis_ideal[[2]]$r_vote_pct,
       y = legis_ideal[[2]]$vote_pct)
@@ -248,10 +236,6 @@ list(
     stan_file = here("stan", "application", "me.stan"),
     data = list(
       N = nrow(legis_ideal[[2]]),
-      N_legis = length(unique(legis_ideal[[2]]$icpsr)),
-      legis = as.numeric(as.factor(legis_ideal[[2]]$icpsr)),
-      N_year = length(unique(legis_ideal[[2]]$congress)),
-      year = as.numeric(as.factor(legis_ideal[[2]]$congress)),
       x_obs = legis_ideal[[2]]$mu,
       x_sd = legis_ideal[[2]]$sigma,
       control = legis_ideal[[2]]$r_vote_pct,
@@ -260,18 +244,16 @@ list(
   tar_target(
     test_d,
     legis_ideal[[1]] |> 
-      filter(alpha < 2.25)
+      filter(alpha < 3, alpha > -3)
   ),
   tar_stan_mcmc(
     dems_skew,
     stan_file = here("stan", "application", "skew.stan"),
     data = list(
       N = nrow(test_d),
-      K = length(unique(test_d$icpsr)),
-      group = as.numeric(as.factor(test_d$icpsr)),
       x_obs = test_d$mu,
       x_sd = test_d$omega,
-      x_skew = test_d$alpha,
+      x_skew = test_d$alpha/2,
       control = test_d$r_vote_pct,
       y = test_d$vote_pct),
     init = 0
@@ -279,18 +261,16 @@ list(
   tar_target(
     test_r,
     legis_ideal[[2]] |> 
-      filter(alpha > -2.5)
+      filter(alpha > -3, alpha < 3)
   ),
   tar_stan_mcmc(
     reps_skew,
     stan_file = here("stan", "application", "skew.stan"),
     data = list(
       N = nrow(test_r),
-      K = length(unique(test_r$icpsr)),
-      group = as.numeric(as.factor(test_r$icpsr)),
       x_obs = test_r$mu,
       x_sd = test_r$omega,
-      x_skew = test_r$alpha,
+      x_skew = test_r$alpha/2,
       control = test_r$r_vote_pct,
       y = test_r$vote_pct),
     init = 0
