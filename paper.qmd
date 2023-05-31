@@ -16,6 +16,7 @@ format:
     include-in-header:
       text:
         \usepackage{amsmath}
+        \usepackage{bm}
 bibliography: [references.bib, packages.bib]
 nocite : |
   @R-dplyr, @R-ggdist, @R-ggplot2, @R-ggtext, @R-MetBrewer, @R-patchwork, @R-targets, @R-cmdstanr, @R-here, @R-MCMCpack, @R-purrr, @R-readr, @R-stantargets
@@ -41,161 +42,131 @@ knitr::write_bib(.packages(), "packages.bib")
 
 ```{=tex}
 \usetikzlibrary{positioning}
+\usetikzlibrary{calc}
 \tikzset{
-    > = stealth,
-    every node/.append style = {
-        draw = none
-    },
-    every path/.append style = {
-        arrows = ->
-    },
-    hidden/.style = {
-        draw = black,
-        shape = circle,
-        inner sep = 1pt
-    }
+  > = stealth,
+  every node/.append style = {
+    draw = none
+  },
+  every path/.append style = {
+    arrows = ->
+  },
+  hidden/.style = {
+    draw = black,
+    shape = circle,
+    inner sep = 1pt
+  }
 }
+```
+
+```{=tex}
+\begin{center}
+\begin{tikzpicture}[node distance=2cm]
+
+  % Nodes
+  \node[circle, dashed, minimum size=.5cm, draw=black, fill=white] (theta) {$\theta$};
+  \node[left of=theta] (etheta) {$e_{\theta}$};
+  \node[below right of=theta, circle, dashed, minimum size=.5cm, draw=black, fill=white] (e) {$E$};
+  \node[right of=e] (r) {$R$};
+  \node[above of=r] (v) {$V$};
+  \node[below of=r] (ee) {$e_E$};
+  \node[above right of=theta] (thetastar) {$\theta^*$};
+
+  % Edges
+  \draw[->] (theta) -- (thetastar);
+  \draw[->] (etheta) -- (thetastar);
+  \draw[->] (e) -- (r);
+  \draw[->] (e) -- (theta);
+  \draw[->] (thetastar) -- (v);
+  \draw[->] (e) -- (v);
+  \draw[->] (ee) -- (r);
+
+\end{tikzpicture}
+\end{center}
+
+
 ```
 
 # Introduction
 
 Variables of interest in the social sciences are often things we cannot directly observe or measure. Examples include the level of democracy or corruption in a country, or the political ideology of an individual or group. Latent variables such as these must be inferred through indirect processes. One common method is to build statistical models which purport to estimate latent variables using observable input data. I will refer to these as *measurement models*. The outputs of measurement models are then used in subsequent inference procedures to test substantive theories in social science. I will refer to this set of models as *theory-testing models*.
 
-In practice, information about the latent variable is often lost when researchers move from measurement to theory-testing. Measurement models do not simply output a single value for the underlying latent variable. Instead, by virtue of being statistical models, they produce *estimates of uncertainty* for each observation. This is particularly true for Bayesian measurement models, whose output is the full posterior distribution of latent variable values according their relative plausibility---not a single point estimate. Failure to propagate this uncertainty from the measurement model into the theory-testing model, as I will show, can lead to mistaken conclusions regarding the underlying research question. And unlike so-called "classical" measurement error, whose attenuation bias properties are generally well understood, the mistakes I investigate can lead to bias in unpredictable directions.
+In practice, information about the latent variable is often lost when researchers move from measurement to theory-testing. Measurement models do not simply output a single value for the underlying latent variable. Instead, by virtue of being statistical models, they produce *estimates of uncertainty* for each observation. This is particularly true for Bayesian measurement models, whose output is the full posterior distribution of values according their relative plausibility---not a single point estimate and standard error as is the case for frequentist models. Failure to propagate this uncertainty from the measurement model into the theory-testing model, as I will show, can lead to mistaken conclusions regarding the underlying research question. And unlike so-called "classical" measurement error, whose attenuation bias is generally well known, the mistakes I investigate can lead to bias in unpredictable directions.
 
-In this paper I demonstrate the problems associated with failing to include measurement model measurement error in theory-testing models, and I develop a method for overcoming these issues. This method is appropriate for any continuous-valued latent variable generated from a Bayesian measurement model. One of the most common types of these in the political science literature is the Bayesian Item-Response Theory (IRT) model used to measure political ideology [@clinton2004; @bafumi2005]. Political ideology is typically imagined as existing on a latent left-right dimension. Bayesian IRT measurement models produce a posterior distribution of continuous values for each actor (e.g. member of Congress) on the left-right scale.
+In this paper I demonstrate the problems associated with failing to include measurement model measurement error in theory-testing models, and I develop a method for overcoming these issues. By faithfully incorporating measurement uncertainty into the theory-testing stage of analysis, I show how both attenuation and confounding bias can be mitigated. While the logic of this method can be applied to any measurement model which produces estimates of uncertainty, I focus specifically on continuous-valued latent variables generated from a Bayesian measurement model. 
 
-Theory-testing research which uses these two measurement models typically reduces the posterior distributions down to a single *maximum a posteriori* (MAP) value. In the case of Bayesian IRT models, researchers select some statistic of central tendency from each posterior distribution to use in subsequent analyses, such as the mean, median, or mode. For BISG models, simply the race or ethnicity with highest posterior probability in the simplex is chosen. @fig-measurement-model shows visually how information is lost when reducing the measurement model's posterior output to a single MAP value.
+Theory-testing research which uses estimates from measurement models typically reduces the posterior distributions down to a single *maximum a posteriori* (MAP) value. In the case of continuous variables, researchers select some statistic of central tendency from each posterior distribution to use in subsequent analyses, such as the mean, median, or mode. This practice necessarily discards information from the full distribution. @fig-measurement-model show four hypothetical posterior distributions that may arise from a Bayesian measurement model. Despite all having the same mean of zero, higher order moments such as variance (top-right), skew (bottom-left), and kurtosis (bottom-right) can create distributions which vary to a large extent.
 
 ```{r}
 #| label: fig-measurement-model
 #| fig-cap: "Ignoring Measurement Error in Measurement Models"
+empty_labeller <- function(variable, value) {
+  return("")
+}
+
 N <- 100000
 tibble(x = c(rnorm(N, sd = 1),
              rnorm(N, sd = 2),
              sn::rsn(N, alpha = -4, omega = 2, xi = 1.5),
              sn::rst(N, xi = -2.75, omega = 2, alpha = 4, nu = 1)),
-       y = c(rep("a", N), rep("b", N), rep("c", N), rep("d", N))) |> 
+       y = c(rep("A\nNormal(0, 1)", N), 
+             rep("B\nNormal(0, 2)", N), 
+             rep("C\nSkew Normal(1.5, 2, -4)", N), 
+             rep("D\nSkew t(-2.75, 2, 4, 1)", N))) |> 
   ggplot(aes(x = x)) +
-  geom_density(color = "black", fill = "darkcyan", alpha = .5) +
+  geom_histogram(color = "white", fill = "darkcyan", alpha = .5, bins = 50) +
+  geom_vline(xintercept = 0, linetype = "twodash", color = "black", linewidth = .7) +
+  geom_text(aes(label = y), x = -4, y = 0) +
   facet_wrap(~ y, nrow = 2) +
-  xlim(-6, 6) +
-  theme_void()
+  xlim(-5, 5) +
+  theme_ggdist() +
+  labs(y = "", x = "", caption = "Four different measurement model posterior distributions with mean zero") +
+  theme(axis.line.y = element_blank(),
+        axis.text.y = element_blank(),
+        axis.ticks.y = element_blank(),
+        text = element_text(family = "serif"))
 ```
 
+In @fig-measurement-model, an estimate from distribution B should be treated as more uncertain than one from distribution A when used to test a theory. Failing to do so, as I will show, can lead to attenuation bias---or the false conclusion that the latent variable has no association with an outcome when it in fact does. In other words, the method I propose can help increase the statistical power of theory tests. Panels C and D in #fig-measurement-model show skewed distributions. Here the danger is that the skewness is caused by a third variable, which also causes the outcome of interest in the theory-testing model. This, as I will show, can lead to confounding bias if the skewness of the measurement output is not accounted for.
 
-```{r}
-#| label: fig-measurement-model
-#| fig-cap: "Ignoring Measurement Error in Measurement Models"
+## Method Overview
 
-set.seed(1111)
-
-p1 <- tibble(race = c("AAPI", "Black", "Hispanic", "Native\nAmerican", "White"),
-       probs = round(c(MCMCpack::rdirichlet(1, c(1, 5, 15, 3, 4))), 3)) |> 
-  ggplot(aes(x = race, fill = probs, y = 0, label = probs, family = "serif")) +
-  geom_textbox(color = "black", height = .15, width = .15, valign = .5, halign = .5,
-               size = 3) +
-  geom_text(aes(label = race, y = 0.25), size = 2.5) +
-  geom_segment(aes(x = "Hispanic", xend = "Hispanic", y = -.15, yend = -.7),
-               arrow = arrow(length = unit(.1, "inches")), color = "black", linewidth = .5) +
-  geom_text(aes(label = "Hispanic", x = "Hispanic", y = -.75), size = 4, color = "black") +
-  geomtextpath::geom_textcurve(aes(x = 0, xend = 0, yend = 0.9, y = -.4), 
-                               label = "Measurement Model", position = position_dodge(width = 1), 
-                               curvature = -.1) +
-  geomtextpath::geom_textcurve(aes(x = 0, xend = 0, yend = -.5, y = -.9), 
-                               label = "MAP", position = position_dodge(width = 1), 
-                               curvature = -.1) +
-  theme_void() +
-  ylim(-.9, 0.9) +
-  scale_fill_continuous(low = "white", high = met.brewer("Isfahan1", 2)[2]) +
-  theme(legend.position = "none", plot.title = element_text(hjust = .5),
-        text = element_text(family = "serif")) +
-  labs(title = "BISG")
-
-p2 <- tibble(x = rnorm(500, mean = .75, sd = .75)) |> 
-  ggplot(aes(x = x, label = round(mean(x), 3), family = "serif")) +
-  geom_histogram(bins = 75, color = "white", fill = met.brewer("Isfahan1", 2)[2]) +
-  geom_segment(aes(x = mean(x), xend = mean(x), y = 0, yend = -18), color = "white") +
-  geom_segment(aes(x = mean(x), xend = mean(x), y = 3, yend = -10), 
-               arrow = arrow(length = unit(.1, "inches")), color = "black", linewidth = .5) +
-  geom_segment(aes(x = -5, xend = 5, y = 0, yend = 0), 
-               color = "black", linewidth = 1) +
-  geom_curve(aes(x = 5, xend = 5, yend = 40, y = -3),
-             curvature = .15, position = position_dodge(width = 1)) +
-  geom_curve(aes(x = 5, xend = 5, yend = -6, y = -18),
-             curvature = .15, position = position_dodge(width = 1)) +
-  geom_text(aes(x = mean(x), y = -12), size = 4, color = "black") +
-  geom_text(aes(x = -3.5, y = -2), label = "Liberal", size = 3) +
-  geom_text(aes(x = 3.5, y = -2), label = "Conservative", size = 3) +
-  theme_void() +
-  theme(plot.title = element_text(hjust = .5), text = element_text(family = "serif")) +
-  labs(title = "Bayesian IRT")
-
-p1 + p2
-```
-
-```{r}
-#| eval: false
-p1 <- tibble(race = rep(c("AAPI", "Black", "Hispanic", "Native\nAmerican", "White"), 3),
-       probs = round(
-         c(MCMCpack::rdirichlet(1, c(1, 1, 20, 1, 1)),
-           MCMCpack::rdirichlet(1, c(1, 1, 10, 1, 10)),
-           MCMCpack::rdirichlet(1, c(5, 5, 8, 5, 5))), 
-         3),
-       model = c(rep("a", 5),
-                 rep("b", 5),
-                 rep("c", 5))) |> 
-  ggplot(aes(x = probs, y = model, fill = race)) +
-  geom_bar(stat = "identity") +
-  scale_fill_met_d("Cross") +
-  theme_void() +
-  theme(legend.position = "none")
-
-p2 <- ggplot() +
-  stat_function(fun = dnorm,
-                args = list(sd = 1), 
-                geom = "area", fill = met.brewer("Cross")[[7]], alpha = 1) +
-    stat_function(fun = dnorm,
-                args = list(sd = 1), 
-                color = "white", linewidth = 1, linetype = "solid") +
-  xlim(-9, 9) +
-  theme_void()
-
-p3 <- ggplot() +
-  stat_function(fun = dnorm,
-                args = list(sd = 3), 
-                geom = "area", fill = met.brewer("Cross")[[7]], alpha = 1) +
-  stat_function(fun = dnorm,
-                args = list(sd = 3), 
-                color = "white", linewidth = 1, linetype = "solid") +
-  xlim(-9, 9) +
-  theme_void()
-
-p4 <- ggplot() +
-  stat_function(fun = sn::dsn,
-                args = list(alpha = -3, omega = 3, xi = 3), 
-                geom = "area", fill = met.brewer("Cross")[[7]], alpha = 1) +
-  stat_function(fun = sn::dsn,
-                args = list(alpha = -3, omega = 3, xi = 3), 
-                color = "white", linewidth = 1, linetype = "solid") +
-  xlim(-9, 9) +
-  theme_void()
-
-p1 + (p2 / p4 / p3)
-```
-
-While the two types of measurement models I consider: continuous and discrete, pose different practical challenges in how their outputs should be used in theory-testing models, the underlying logic in the method I propose applies to both. In short, the measurement process and theory-testing procedure should happen simultaneously in a single model. This is handled straightforwardly using the Bayesian statistical framework, which can easily treat parameters and data interchangeably [@mcelreath2020]. We start by specifying the full measurement model, whose posterior distributions for each observation's value of the latent variable are then used as data in the theory-testing model. The stylized version of this joint model is shown in @eq-ex-equation, where $g(\cdot)$ is the measurement model which produces posterior values of the latent variable, $\theta_i$ based on the observations $\theta^*_i$. The posterior estimates for $\theta_i$ from the measurement model are then used as data in the theory-testing model $y_i \sim f(\cdot)$.
+How can researchers avoid the issues highlighted above? In short, the measurement process and theory-testing procedure should happen simultaneously in a single model. This is handled straightforwardly using the Bayesian statistical framework, which can easily treat parameters and data interchangeably [@mcelreath2020]. We start by specifying the full measurement model, whose posterior distributions for each observation's value of the latent variable are then used as data in the theory-testing model. The stylized version of this joint model is shown in @eq-ex-equation, where $g(\cdot)$ is the measurement model which produces posterior estimates of the latent variable, $\theta_i$ for each observation based on some training data $y^*$. The posterior estimates for $\theta_i$ from the measurement model $g(\cdot)$ are then used as data in the theory-testing model $f(\theta_i)$ using the outcome of interest $y$.
 
 $$
 \begin{aligned}
   y_i &\sim f(\theta_i) \\
-  \theta^*_i &\sim g(\cdot)
+  y^*_i &\sim g(\theta_i)
 \end{aligned}
 $$ {#eq-ex-equation}
 
-There are two practical issues, however, with building a fully-specified joint measurement and theory-testing model. The first is computational. Bayesian statistical software uses notoriously expensive Markov Chain Monte Carlo (MCMC) sampling methods to derive its posterior distributions. Even on their own, measurement models which use MCMC can be extremely slow to sample given these types of models' high-dimensional nature. So attempting to sample from a model which also includes an arbitrarily complex theory-testing model in addition to the measurement model may simply be unfeasible given the computing power that the average researcher has access to. The second challenge with the idealized joint model is that it requires researchers to write down a fully-specified measurement model. Applied researchers likely have much more knowledge about what their preferred theory-testing model looks like, rather than the intricacies involved in estimating latent variables. Measurement models can often be challenging to write in practice due to issues of identifiability.
+There are two practical issues, however, with building a fully-specified joint measurement and theory-testing model. The first is computational. Bayesian statistical software uses notoriously expensive Markov Chain Monte Carlo (MCMC) sampling methods to derive its posterior distributions. Even on their own, measurement models which use MCMC can be extremely slow to sample given these types of models' high-dimensional nature. So attempting to sample from a model which also includes an arbitrarily complex theory-testing model, $f(\cdot)$, in addition to the measurement model may simply be unfeasible given the computing power that the average researcher has access to. The second challenge with the idealized joint model is that it requires researchers to write down a fully-specified measurement model, $g(\cdot)$. Compared to their theory-testing model, applied researchers likely have much less knowledge regarding the intricacies involved in estimating latent variables. Measurement models can often be challenging to fit in practice due to issues of identifiability.
 
-My method overcomes the two problems outlined above by simplifying the measurement model step, $\theta^*_i \sim g(\cdot)$ in the joint model. Rather than estimating the latent variable from scratch, I take the uncertainty estimates already provided from the measurement models and use those as approximations in the full joint model. In the case of a categorical latent variable, such as race/ethnicity in BSIG, the measurement function is $\theta^*_i \sim \text{categorical}(\bf{p})$ where $\bf{p}$ is the simplex of race/ethnicity probabilities given by the algorithm. And for continuous latent variables (e.g. Bayesian IRT ideal points), the measurement function is $\theta^*_i \sim \text{Normal}(\mu_i, \sigma_i)$ where $\mu_i$ and $\sigma_i$ correspond to the mean and standard deviation of the posterior distribution for each ideal point. These simplifications faithfully propagate the uncertainty in the outputs of the measurement model to the theory-testing model, while also being computationally tractable and straightforward to implement.
+My method overcomes the two problems outlined above by simplifying the measurement model step, $y^*_i \sim g(\cdot)$ in the joint model. Rather than estimating the latent variable from scratch, I take the posterior distributions already provided from previously fitted measurement models and use those as approximations in the full joint model. The measurement model $g(\cdot)$ becomes a probability distribution function with distributional parameters according to maximum likelihood estimates of the posterior. So if the posterior distribution of the measurement model appears normal, we would use $\mathbb{E}[\theta_i] \sim N(\theta_i, \sigma_i)$. The values $\mathbb{E}[\theta_i]$ and $\sigma_i$ are estimated from the measurement model's posterior distribution, which allows the true, unobserved, value of the latent variable $\theta_i$ to be estimated for each observation. If the posterior distributions from the measurement model appear skewed, or have thicker tails than a normal distribution, the distributional parameters for these distributions can be used instead. These simplifications faithfully propagate the uncertainty in the outputs of the measurement model to the theory-testing model, while also being computationally tractable and straightforward to implement.
+
+## Motivating Example - Bayesian Models of Ideology
+
+One of the most common measurement models in political science is the Bayesian Item-Response Theory (IRT) model used to measure the ideological leanings of political actors [@clinton2004; @bafumi2005]. These models assume that political ideology is a latent characteristic that lies on a single left-right dimension. Observed actions, such as voting on legislation, are used as training data ($y^*$ in @eq-ex-equation) to produce a posterior distribution of continuous values for each actor (e.g. member of Congress) on this left-right scale. [*insert footnote about how these models can measure other types of latent variables*]
+
+Let's say we wanted to estimate the effect of legislator ideology, $\theta$, on some outcome, $y$. Using the format I developed in @eq-ex-equation, @eq-irt shows an example joint measurement and theory-testing model to answer this question using ideology estimates from an IRT model. The measurement model (bottom) predicts whether a legislator voted yes or no on a piece of legislation, $y^*_j$, using the traditional 2-parameter IRT equation $\Phi(\gamma_j\theta_i + \xi_j)$. Estimates of the parameters $\theta_i$ from this model, are then used as data in the linear regression theory-testing model (top) to estimate $\beta$---the coefficient of theoretical interest.
+
+$$
+\begin{aligned}
+  y_i &\sim \text{Normal}(\alpha + \theta_i \beta, \sigma^2) \\
+  y^*_{ij} &\sim \text{Bernoulli}[\Phi(\gamma_j\theta_i + \eta_i)] \\
+\end{aligned}
+$$ {#eq-irt}
+
+As mentioned previously, however, estimating @eq-irt would not generally be feasible due to computational constraints. Instead, the IRT ideology measurement model should be fit beforehand. Then, for each legislator's posterior distribution of $\theta$, the values $\mathbb{E}[\theta_i]$ and $\sigma^2_{\theta i}$ should be calculated. These values can then used as data in the simplified measurement model in @eq-irt-me in order to estimate the latent $\theta_i$ for each observation.
+
+$$
+\begin{aligned}
+  y_i &\sim \text{Normal}(\alpha + \theta_i \beta, \sigma^2) \\
+  \mathbb{E}[\theta_i] &\sim \text{Normal}(\theta_i, \sigma^2_{\theta i})
+\end{aligned}
+$$ {#eq-irt-me}
+
+If the posterior estimates of $\theta$ from the IRT measurement model are truly normally distributed for each legislator, then @eq-irt and @eq-irt-me are essentially equivalent---thereby properly incorporating the measurement model measurement error in the theory-testing model. If, however, the IRT model produces posterior distributions that are not normal, then this simplification step could be throwing out important information. For this reason I extend the model to include a skewness parameter later in this project.
 
 # Measurement Error Models
 
@@ -207,9 +178,9 @@ I will demonstrate my argument using the causal graph framework [@pearl2000]. Ca
 
 ## Measurement Error Confounding Bias
 
-@fig-race-dag shows a simple DAG outlining the causal process implied by the BSIG race/ethnicity measurement model. The estimated race produced by the model, $R^*$ is a function of an individual's "true" race, $R$ and measurement error, $e^R$. The notion of a "true" race is somewhat misleading, however, because race is typically understood to be mutable and socially contingent---rather than biologically innate [@omi2014; @fields2014]. The BSIG algorithm's training data come from the US Census, so what it is truly measuring is racial self-identification while filling out a Census survey. Self-reported race may differ in important ways from other conceptions of race, such as those observed or ascribed by others [@saperstein2006]. Ontological considerations of race aside, the important takeaway from @fig-race-dag is that the race variable produced by BSIG arises causally from a combination of some latent "true" race (which we do not observe), and from measurement error (which we observe, at least partially, in the form of the race probability simplex).
+@fig-irt-dag shows a simple DAG outlining the causal process implied by the IRT ideology measurement model. The estimated ideology variable produced by the model, $\theta^*$ is a function of an individual's true ideology, $\theta$ and measurement error, $e^{\theta}$. The important takeaway from @fig-irt-dag is that the ideology variable produced by IRT models arises causally from a combination of some latent true ideology (which we do not observe), and from measurement error (which we observe, at least partially, in the form of the posterior distribution for $\theta^*$). There is likely also considerable unobserved measurement error in these models that can be due to a variety of factors. IRT models assume each legislator's decision to vote on bill is influenced solely by their innate ideology, rather than on strategic concerns. A violation of this assumption, therefore, will produce biased estimates of $\theta^*$. There are also computational issues with fitting IRT models which may make the posterior estimates untrustworthy. For the purposes of this illustration, however, I will assume that the posterior distribution, $e^{\theta}$ for $\theta^*$ contains all relevant information about the measurement error for the true ideology $\theta$.
 
-::: {#fig-race-dag fig-cap="BSIG Measurement Error Model"}
+::: {#fig-irt-dag fig-cap="IRT Ideology Measurement Error Model"}
 ```{=tex}
 \begin{Large}
 \begin{center}
@@ -381,9 +352,26 @@ tar_load(cont_coef_plot)
 cont_coef_plot
 ```
 
-\newpage
+# Skew-Normal Distribution
 
-\[*I am still working on how to code up the model using the categorical measurement error. But once I get it done I hope to use it to show how this method can be used to deal with non-random, confounding, measurement error I discuss in the BSIG section*\]
+```{r}
+tar_load(bias_coef_plot)
+bias_coef_plot
+```
+
+
+# Case Study: Does Political Extremism Affect Election Outcomes?
+
+```{r}
+tar_load(reelection_coef_plot)
+reelection_coef_plot
+```
+
+
+## Extension Skew-t
+
+## Importance of gibbs vs HMC vs no uncertainty
+
 
 \newpage
 
