@@ -43,7 +43,7 @@ assemble_reelection_draws <- function(dems_no_me_draws,
         mutate(model = "Normal ME Model"),
       dems_no_me_draws |> 
         dplyr::select("beta1") |> 
-        mutate(model = "MAP Model"),
+        mutate(model = "Mean Only Model"),
       dems_skew_draws |> 
         dplyr::select("beta1") |> 
         mutate(model = "Skew-Normal ME Model")
@@ -55,7 +55,7 @@ assemble_reelection_draws <- function(dems_no_me_draws,
         mutate(model = "Normal ME Model"),
       reps_no_me_draws |> 
         dplyr::select("beta1") |> 
-        mutate(model = "MAP Model"),
+        mutate(model = "Mean Only Model"),
       reps_skew_draws |> 
         dplyr::select("beta1") |> 
         mutate(model = "Skew-Normal ME Model")

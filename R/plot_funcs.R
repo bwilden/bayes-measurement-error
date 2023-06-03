@@ -26,9 +26,11 @@ compare_cont_coefs <- function(me, meas, true) {
   coefs <- rbind(me, meas)
   
   p <- coefs |> 
+    mutate(model_name = case_when(model_name == "Mean Values Only" ~ "Mean Only Model",
+                                  model_name == "Measurement Error" ~ "Measurement Error Model")) |> 
     ggplot(aes(x = corr_x, y = mean, color = model_name)) +
     geom_smooth(n = 8, fill = "gray", level = 0.89) +
-    geom_pointrange(aes(ymin = `5.5%`, ymax = `94.5%`)) +
+    geom_pointrange(aes(ymin = `5.5%`, ymax = `94.5%`), size = .3) +
     geom_hline(yintercept = true, linetype = "dashed") +
     # geomtextpath::geom_texthline(label = paste("True Parameter Value =", true), 
     #                              yintercept = true, family = "serif") +
@@ -107,20 +109,22 @@ compare_coefs <- function(me_draws, no_me_draws, true) {
       mutate(model = "Measurement Error\nModel"),
     no_me_draws |> 
       dplyr::select("beta") |> 
-      mutate(model = "Mean Values Only")
+      mutate(model = "Mean Only Model")
   )
   
   p <- draws |>
-    ggplot(aes(x = beta, y = model)) +
-    stat_slabinterval(fill = met.brewer("Isfahan1", 1), 
-                      alpha = .75, size = 10, fatten_point = 3) +
+    ggplot(aes(x = beta, y = model, fill = model)) +
+    stat_slabinterval(alpha = .75, size = 4, fatten_point = 2) +
     labs(y = "")  +
     geom_vline(xintercept = true, 
                linetype = "dashed", 
                color = "grey",
                size = 1.25) +
+    scale_fill_manual(values = met.brewer("Isfahan1", 2)) +
     labs(x = "Coefficient Estimate", caption = paste("True Coefficient Value =", true)) +
-    theme_ggdist()
+    theme_ggdist() +
+    theme(text = element_text(family = "serif"),
+          legend.position = "none")
   
   return(p)
 }
@@ -130,17 +134,20 @@ compare_coefs <- function(me_draws, no_me_draws, true) {
 
 compare_reelection_coefs <- function(draws) {
   p <- draws |>
-    ggplot(aes(x = beta1, y = model)) +
-    stat_slabinterval(fill = met.brewer("Isfahan1", 1), 
-                      alpha = .75, size = 3, fatten_point = 2,
+    ggplot(aes(x = beta1, y = model, fill = model)) +
+    stat_slabinterval(alpha = .75, size = 2, fatten_point = 2,
                       .width = .89) +
-    labs(x = "Coefficient Estimate", y = "") +
+    labs(x = "Election Share %", y = "",
+         caption = "Independent variable is measured such that lower values correspond to more liberal,\nand higher values correspond to more conservative") +
     geom_vline(xintercept = 0,
                linetype = "dashed",
                color = "grey",
                size = 1) +
     facet_wrap(~ party, nrow = 2) +
-    theme_ggdist() 
+    scale_fill_manual(values = met.brewer("Isfahan1", 3)) +
+    theme_ggdist() +
+    theme(text = element_text(family = "serif"),
+          legend.position = "none")
   
   return(p)
 }
