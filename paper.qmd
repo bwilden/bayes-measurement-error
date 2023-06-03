@@ -35,6 +35,9 @@ library(ggtext)
 library(patchwork)
 library(MetBrewer)
 library(cmdstanr)
+library(pscl)
+library(sn)
+library(tidybayes)
 library(MCMCpack)
 
 knitr::write_bib(.packages(), "packages.bib")
@@ -58,44 +61,15 @@ knitr::write_bib(.packages(), "packages.bib")
   }
 }
 ```
-
-```{=tex}
-\begin{center}
-\begin{tikzpicture}[node distance=2cm]
-
-  % Nodes
-  \node[circle, dashed, minimum size=.5cm, draw=black, fill=white] (theta) {$\theta$};
-  \node[left of=theta] (etheta) {$e_{\theta}$};
-  \node[below right of=theta, circle, dashed, minimum size=.5cm, draw=black, fill=white] (e) {$E$};
-  \node[right of=e] (r) {$R$};
-  \node[above of=r] (v) {$V$};
-  \node[below of=r] (ee) {$e_E$};
-  \node[above right of=theta] (thetastar) {$\theta^*$};
-
-  % Edges
-  \draw[->] (theta) -- (thetastar);
-  \draw[->] (etheta) -- (thetastar);
-  \draw[->] (e) -- (r);
-  \draw[->] (e) -- (theta);
-  \draw[->] (thetastar) -- (v);
-  \draw[->] (e) -- (v);
-  \draw[->] (ee) -- (r);
-
-\end{tikzpicture}
-\end{center}
-
-
-```
-
 # Introduction
 
 Variables of interest in the social sciences are often things we cannot directly observe or measure. Examples include the level of democracy or corruption in a country, or the political ideology of an individual or group. Latent variables such as these must be inferred through indirect processes. One common method is to build statistical models which purport to estimate latent variables using observable input data. I will refer to these as *measurement models*. The outputs of measurement models are then used in subsequent inference procedures to test substantive theories in social science. I will refer to this set of models as *theory-testing models*.
 
 In practice, information about the latent variable is often lost when researchers move from measurement to theory-testing. Measurement models do not simply output a single value for the underlying latent variable. Instead, by virtue of being statistical models, they produce *estimates of uncertainty* for each observation. This is particularly true for Bayesian measurement models, whose output is the full posterior distribution of values according their relative plausibility---not a single point estimate and standard error as is the case for frequentist models. Failure to propagate this uncertainty from the measurement model into the theory-testing model, as I will show, can lead to mistaken conclusions regarding the underlying research question. And unlike so-called "classical" measurement error, whose attenuation bias is generally well known, the mistakes I investigate can lead to bias in unpredictable directions.
 
-In this paper I demonstrate the problems associated with failing to include measurement model measurement error in theory-testing models, and I develop a method for overcoming these issues. By faithfully incorporating measurement uncertainty into the theory-testing stage of analysis, I show how both attenuation and confounding bias can be mitigated. While the logic of this method can be applied to any measurement model which produces estimates of uncertainty, I focus specifically on continuous-valued latent variables generated from a Bayesian measurement model. 
+In this paper I demonstrate the problems associated with failing to include measurement model measurement error in theory-testing models, and I develop a method for overcoming these issues. By faithfully incorporating measurement uncertainty into the theory-testing stage of analysis, I show how both attenuation and confounding bias can be mitigated. While the logic of this method can be applied to any measurement model which produces estimates of uncertainty, I focus specifically on continuous-valued latent variables generated from a Bayesian measurement model.
 
-Theory-testing research which uses estimates from measurement models typically reduces the posterior distributions down to a single *maximum a posteriori* (MAP) value. In the case of continuous variables, researchers select some statistic of central tendency from each posterior distribution to use in subsequent analyses, such as the mean, median, or mode. This practice necessarily discards information from the full distribution. @fig-measurement-model show four hypothetical posterior distributions that may arise from a Bayesian measurement model. Despite all having the same mean of zero, higher order moments such as variance (top-right), skew (bottom-left), and kurtosis (bottom-right) can create distributions which vary to a large extent.
+Theory-testing research which uses estimates from measurement models typically reduces the posterior distributions down to a single value. In the case of continuous variables, researchers select some statistic of central tendency from each posterior distribution to use in subsequent analyses, such as the mean, median, or mode. This practice necessarily discards information from the full distribution. @fig-measurement-model show four hypothetical posterior distributions that may arise from a Bayesian measurement model. Despite all having the same mean of zero, higher order moments such as variance (top-right), skew (bottom-left), and kurtosis (bottom-right) can create distributions which vary to a large extent.
 
 ```{r}
 #| label: fig-measurement-model
@@ -116,7 +90,7 @@ tibble(x = c(rnorm(N, sd = 1),
   ggplot(aes(x = x)) +
   geom_histogram(color = "white", fill = "darkcyan", alpha = .5, bins = 50) +
   geom_vline(xintercept = 0, linetype = "twodash", color = "black", linewidth = .7) +
-  geom_text(aes(label = y), x = -4, y = 0) +
+  # geom_text(aes(label = y), x = -4, y = 0) +
   facet_wrap(~ y, nrow = 2) +
   xlim(-5, 5) +
   theme_ggdist() +
@@ -127,7 +101,7 @@ tibble(x = c(rnorm(N, sd = 1),
         text = element_text(family = "serif"))
 ```
 
-In @fig-measurement-model, an estimate from distribution B should be treated as more uncertain than one from distribution A when used to test a theory. Failing to do so, as I will show, can lead to attenuation bias---or the false conclusion that the latent variable has no association with an outcome when it in fact does. In other words, the method I propose can help increase the statistical power of theory tests. Panels C and D in #fig-measurement-model show skewed distributions. Here the danger is that the skewness is caused by a third variable, which also causes the outcome of interest in the theory-testing model. This, as I will show, can lead to confounding bias if the skewness of the measurement output is not accounted for.
+In @fig-measurement-model, an estimate from distribution B should be treated as more uncertain than one from distribution A when used to test a theory. Failing to do so, as I will show, can lead to attenuation bias---or the false conclusion that the latent variable has no association with an outcome when it in fact does. In other words, the method I propose can help increase the statistical power of theory tests. Panels C and D in @fig-measurement-model show skewed distributions. Here the danger is that the skewness is caused by a third variable, which *also* causes the outcome of interest in the theory-testing model. This, as I will show, can lead to confounding bias if the skewness of the measurement output is not accounted for.
 
 ## Method Overview
 
@@ -140,29 +114,29 @@ $$
 \end{aligned}
 $$ {#eq-ex-equation}
 
-There are two practical issues, however, with building a fully-specified joint measurement and theory-testing model. The first is computational. Bayesian statistical software uses notoriously expensive Markov Chain Monte Carlo (MCMC) sampling methods to derive its posterior distributions. Even on their own, measurement models which use MCMC can be extremely slow to sample given these types of models' high-dimensional nature. So attempting to sample from a model which also includes an arbitrarily complex theory-testing model, $f(\cdot)$, in addition to the measurement model may simply be unfeasible given the computing power that the average researcher has access to. The second challenge with the idealized joint model is that it requires researchers to write down a fully-specified measurement model, $g(\cdot)$. Compared to their theory-testing model, applied researchers likely have much less knowledge regarding the intricacies involved in estimating latent variables. Measurement models can often be challenging to fit in practice due to issues of identifiability.
+There are two practical issues, however, with building a fully-specified joint measurement and theory-testing model. The first is computational. Bayesian statistical software uses notoriously expensive Markov Chain Monte Carlo (MCMC) sampling methods to derive its posterior distributions. Even on their own, measurement models which use MCMC can be extremely slow to sample given these types of models' high-dimensional nature. So attempting to sample from a model which also includes an arbitrarily complex theory-testing model, $f(\cdot)$, in addition to the measurement model may simply be unfeasible given the computing power that the average researcher has access to. The second challenge with the idealized joint model is that it requires researchers to write down a fully-specified measurement model, $g(\cdot)$. Compared to their theory-testing model, applied researchers likely have much less knowledge regarding the intricacies involved in estimating latent variables. Because latent variables have no objective scale, measurement models can often be challenging to fit in practice due to issues of identifiability.
 
-My method overcomes the two problems outlined above by simplifying the measurement model step, $y^*_i \sim g(\cdot)$ in the joint model. Rather than estimating the latent variable from scratch, I take the posterior distributions already provided from previously fitted measurement models and use those as approximations in the full joint model. The measurement model $g(\cdot)$ becomes a probability distribution function with distributional parameters according to maximum likelihood estimates of the posterior. So if the posterior distribution of the measurement model appears normal, we would use $\mathbb{E}[\theta_i] \sim N(\theta_i, \sigma_i)$. The values $\mathbb{E}[\theta_i]$ and $\sigma_i$ are estimated from the measurement model's posterior distribution, which allows the true, unobserved, value of the latent variable $\theta_i$ to be estimated for each observation. If the posterior distributions from the measurement model appear skewed, or have thicker tails than a normal distribution, the distributional parameters for these distributions can be used instead. These simplifications faithfully propagate the uncertainty in the outputs of the measurement model to the theory-testing model, while also being computationally tractable and straightforward to implement.
+The method developed in this paper overcomes the two problems outlined above by simplifying the measurement model step, $y^*_i \sim g(\cdot)$ in the joint model. Rather than estimating the latent variable from scratch, I take the posterior distributions already provided from previously fitted measurement models and use those as approximations in the full joint model. The measurement model $g(\cdot)$ becomes a probability distribution function with distributional parameters according to maximum likelihood estimates of the posterior. So if the posterior distribution of the measurement model appears normal, we would use $\bar{\theta}_i \sim N(\theta_i, \sigma^2_{\theta[i]})$. The values $\bar{\theta}_i$ and $\sigma^2_{\theta[i]}$ are estimated from the measurement model's posterior distribution, which allows the true, unobserved, value of the latent variable $\theta_i$ to be estimated for each observation. If the posterior distributions from the measurement model appear skewed, or have thicker tails than a normal distribution, the distributional parameters for these distributions can be used instead. These simplifications faithfully propagate the uncertainty in the outputs of the measurement model to the theory-testing model, while also being computationally tractable and straightforward to implement.
 
 ## Motivating Example - Bayesian Models of Ideology
 
-One of the most common measurement models in political science is the Bayesian Item-Response Theory (IRT) model used to measure the ideological leanings of political actors [@clinton2004; @bafumi2005]. These models assume that political ideology is a latent characteristic that lies on a single left-right dimension. Observed actions, such as voting on legislation, are used as training data ($y^*$ in @eq-ex-equation) to produce a posterior distribution of continuous values for each actor (e.g. member of Congress) on this left-right scale. [*insert footnote about how these models can measure other types of latent variables*]
+One of the most common measurement models in political science is the Bayesian Item-Response Theory (IRT) model used to measure the ideological leanings of political actors [@clinton2004; @bafumi2005]. These models assume that political ideology is a latent characteristic that lies on a single left-right dimension. Observed actions, such as voting on legislation, are used as training data ($y^*$ in @eq-ex-equation) to produce a posterior distribution of continuous values for each actor (e.g. member of Congress) on this left-right scale.
 
-Let's say we wanted to estimate the effect of legislator ideology, $\theta$, on some outcome, $y$. Using the format I developed in @eq-ex-equation, @eq-irt shows an example joint measurement and theory-testing model to answer this question using ideology estimates from an IRT model. The measurement model (bottom) predicts whether a legislator voted yes or no on a piece of legislation, $y^*_j$, using the traditional 2-parameter IRT equation $\Phi(\gamma_j\theta_i + \xi_j)$. Estimates of the parameters $\theta_i$ from this model, are then used as data in the linear regression theory-testing model (top) to estimate $\beta$---the coefficient of theoretical interest.
+Let's say we want to estimate the effect of legislator ideology, $\theta$, on some outcome, $y$. Using the format I developed in @eq-ex-equation, @eq-irt shows an example joint measurement and theory-testing model to answer this question using ideology estimates from an IRT model. The measurement model (bottom) predicts whether a legislator voted yes or no on a piece of legislation, $y^*$, using the traditional 2-parameter IRT equation $\Phi(\gamma_j\theta_i + \xi_j)$. Estimates of the parameters $\theta_i$ from this model, are then used as data in the linear regression theory-testing model (top) to estimate $\beta_1$---the coefficient of substantive interest.
 
 $$
 \begin{aligned}
-  y_i &\sim \text{Normal}(\alpha + \theta_i \beta, \sigma^2) \\
-  y^*_{ij} &\sim \text{Bernoulli}[\Phi(\gamma_j\theta_i + \eta_i)] \\
+  y_i &\sim \text{Normal}(\beta_0 + \theta_i \beta_1, \sigma^2) \\
+  y^*_{ij} &\sim \text{Bernoulli}[\Phi(\gamma_j\theta_i + \xi_i)] \\
 \end{aligned}
 $$ {#eq-irt}
 
-As mentioned previously, however, estimating @eq-irt would not generally be feasible due to computational constraints. Instead, the IRT ideology measurement model should be fit beforehand. Then, for each legislator's posterior distribution of $\theta$, the values $\mathbb{E}[\theta_i]$ and $\sigma^2_{\theta i}$ should be calculated. These values can then used as data in the simplified measurement model in @eq-irt-me in order to estimate the latent $\theta_i$ for each observation.
+As mentioned previously, however, estimating @eq-irt would not generally be feasible due to computational constraints. Instead, I propose that the IRT ideology measurement model be fit beforehand. Then, for each legislator's posterior distribution of $\theta$, the values $\bar{\theta}_i$ and $\sigma^2_{\theta[i]}$ are calculated via maximum likelihood. These values are in turn used as data in the simplified measurement model in @eq-irt-me in order to estimate the latent $\theta_i$ for each observation.
 
 $$
 \begin{aligned}
-  y_i &\sim \text{Normal}(\alpha + \theta_i \beta, \sigma^2) \\
-  \mathbb{E}[\theta_i] &\sim \text{Normal}(\theta_i, \sigma^2_{\theta i})
+  y_i &\sim \text{Normal}(\beta_0 + \beta_1 \bar{\theta}_i, \sigma^2) \\
+  \bar{\theta}_i &\sim \text{Normal}(\theta_i, \sigma^2_{\theta [i]})
 \end{aligned}
 $$ {#eq-irt-me}
 
@@ -176,77 +150,20 @@ I will demonstrate my argument using the causal graph framework [@pearl2000]. Ca
 
 [^1]: See @cinelli2020 for a more complete introduction to deconfounding using DAGs.
 
-## Measurement Error Confounding Bias
-
-@fig-irt-dag shows a simple DAG outlining the causal process implied by the IRT ideology measurement model. The estimated ideology variable produced by the model, $\theta^*$ is a function of an individual's true ideology, $\theta$ and measurement error, $e^{\theta}$. The important takeaway from @fig-irt-dag is that the ideology variable produced by IRT models arises causally from a combination of some latent true ideology (which we do not observe), and from measurement error (which we observe, at least partially, in the form of the posterior distribution for $\theta^*$). There is likely also considerable unobserved measurement error in these models that can be due to a variety of factors. IRT models assume each legislator's decision to vote on bill is influenced solely by their innate ideology, rather than on strategic concerns. A violation of this assumption, therefore, will produce biased estimates of $\theta^*$. There are also computational issues with fitting IRT models which may make the posterior estimates untrustworthy. For the purposes of this illustration, however, I will assume that the posterior distribution, $e^{\theta}$ for $\theta^*$ contains all relevant information about the measurement error for the true ideology $\theta$.
-
-::: {#fig-irt-dag fig-cap="IRT Ideology Measurement Error Model"}
-```{=tex}
-\begin{Large}
-\begin{center}
-\tikz{
-    \node (race_s) {$R^*$};
-    \node (race_s_label) [right = .1 of race_s] {$\textcolor{teal}{\text{\normalsize Estimated Race}}$};
-    \node[hidden, dashed] (race) [above = 1.5 of race_s] {$R$};
-    \node (race_label) [above = .1 of race] {$\textcolor{teal}{\text{\normalsize True Race}}$};
-    \node (e_race) [left = 1.5 of race_s] {$e^R$};
-    \node (e_race_label) [left = 0 of e_race] {$\textcolor{teal}{\text{\normalsize Measurement Error}}$};   
-    
-    \path[dashed] (race) edge (race_s);
-    \path (e_race) edge (race_s);
-}
-\end{center}
-\end{Large}
-```
-:::
-
-Now consider a hypothetical theory-testing model constructed to determine whether there were racial disparities in voter turnout, $Y$ after the enactment of voter identification laws at time, $T$. Suppose we do not have data on individuals' self-reported race, and therefore must use BSIG to estimate $R^*$. @fig-race-dag-theory shows a potential causal graph for this system. The main causal effect of interest is represented by the path $R^* \longrightarrow Y$, moderated by $T$. In order to get an unbiased estimate of this causal effect we need to close all backdoor paths leading from $R^*$ to $Y$, which in this case, flows through the unobserved variable $U$. This confound represents anything that is a common cause of both the BSIG measurement error and voter turnout. @argyle2022 systematically review BSIG misclassification rates and find that socio-economic status and geography affect the amount of measurement error in the algorithm. It is also highly plausible that these variables have an independent effect on turnout rates in the population.
-
-::: {#fig-race-dag-theory fig-cap="BSIG Measurement Error in a Hypothetical Theory-Testing Model"}
-```{=tex}
-\begin{Large}
-\begin{center}
-\tikz{
-    \node (race_s) {$R^*$};
-    \node[hidden, dashed] (race) [above = 1.5 of race_s] {$R$};
-    \node (e_race) [left = 1.5 of race_s] {$e^R$};
-    \node[hidden, dashed] (confound) [below = 1.5 of race_s] {$U$};
-    \node (confound_label) [below = .1 of confound] {$\textcolor{teal}{\text{\normalsize Confound}}$};  
-    \node (y) [right = 1.5 of race_s] {$Y$};
-    \node (y_label) [above = .1 of y] {$\textcolor{teal}{\text{\normalsize Turnout}}$};
-    \node (t) [below right = 1.5 of y] {$T$};
-    \node (t_label) [below = 0 of t] {$\textcolor{teal}{\text{\normalsize Time}}$};
-    
-    \path[dashed] (race) edge (race_s);
-    \path (e_race) edge (race_s);
-    \path[dashed] (confound) edge [bend left=20] (e_race);
-    \path[dashed] (confound) edge [bend right=20] (y);
-    \path (race_s) edge (y);
-    \path (t) edge (y);
-}
-\end{center}
-\end{Large}
-```
-:::
-
-For the theory-testing model in @fig-race-dag-theory it may be possible to condition on some variables in $U$ in order to obtain an unbiased estimate of $R^* \longrightarrow Y$. But with something as multi-faceted as socio-economic status, there is always the risk of residual confounding. My proposed method of building a joint measurement and theory-testing model fixes this issue by obviating the need to deal with $U$ at all. This is because the measurement error, $e^R$ in @fig-race-dag-theory is part of the backdoor path from $R^*$ to $Y$. Therefore when we explicitly incorporate $e^R$ into a model estimating $R^* \longrightarrow Y$ we can obtain an unbiased estimate of the causal effect of race on turnout.
-
-While I have only presented a discussion of a single theory-testing model---the impact of race on turnout---incorporating $e^R$ into any model using BSIG race estimates will be valuable. Race is often thought to be an "un-caused cause" because it is assigned from an individual's birth, hence unbeholden to influence from other variables. [@sen2016]. This removes the need to worry about potential confounds because there cannot be any backdoor paths through the variable race. But as @fig-race-dag-theory shows, BSIG *estimates* of race, $R^*$ always have the potential to have open backdoor paths through measurement error $e^R$. Simply including $e^R$ directly in a joint measurement theory-testing model blocks this backdoor path going into $R^*$, which helps identify the direct effect of race on the outcome of interest.
+Using the logic of causal graphs, I will discuss two types of measurement model measurement error, and how the joint measurement theory-testing procedure laid out in @eq-ex-equation helps fix them. First I will consider random, or classical, measurement error. In this case the joint model will (in most cases) provide researchers with extra statistical power to test their theory. Then we will look at non-random measurement error scenarios, in which the measurement model error introduces confounding in the theory-testing model. I will show how the joint model from @eq-ex-equation ameliorates this confounding bias. For both types of measurement error, I will use simulation studies to demonstrate how effective each modeling approach is at recovering known parameter values from the theory-testing model.
 
 ## Measurement Error Attenuation Bias
 
-The previous discussion of BSIG race estimates highlighted how failing to account for measurement error could lead to bias via backdoor confounding. This general issue is known as nonrandom, or unignorable, measurement error [@blalock1970]. In the political science methodology literature, methods such as multiple imputation [@blackwell2017] and sensitivity analysis [@gallop2019; @imai2010] have been developed to deal with nonrandom measurement error. My method is another way of dealing with nonrandom measurement error, but in the context where the measurement error is known and comes from the output of some measurement model.
+If the posterior distributions for the latent parameters $\theta_i$ from the measurement model follow a normal distribution, this is a form of classical measurement error. Here we do not assume that there is some relationship between the measurement error and the outcome of interest, rather, the errors are simply random "noise" in the measurement estimates. Classical measurement error leads to attenuation bias: a reduction of the main effect size in the theory-testing model towards zero. Thus, the wider the posterior distribution is for $\bar{\theta}_i$, the more likely we are to make a False Negative error in our theory-testing model.
 
-Measurement model errors can also take the form of classical measurement error. This is where we do not assume that there is some relationship between the measurement error and the outcome of interest, rather, the errors are simply random "noise" in the measurement estimates. Classical measurement error leads to attenuation bias: a reduction of the main effect size in the theory-testing model towards zero. As I demonstrate via simulations, my method can help correct this kind of bias in theory-testing models as well.
+Let's return to the Bayesian IRT measurement model used to estimate political ideology for legislators. @fig-ideal-dag shows the causal process which produces these ideal point estimates. The observed measurements of ideology, $\bar{\theta}$ come from an unobserved latent variable plus some measurement error. At least two variables can affect the measurement error, $e^{\theta}$ in @fig-ideal-dag. First, true ideal point of the group, $\theta$ influences the amount of measurement error for estimates of the group's ideology because, as we move further from the ideological center of the scale, uncertainty increases. @fig-irt-dist shows an example of what the distribution of posterior estimates from a Bayesian IRT model look like. Groups further from the center have much wider ideal point posterior distributions. The second variable affecting $e^{\theta}$ is participation, $P$---how much a particular legislator has taken positions on bills. Legislators that signal more positions on bills will have smaller levels of measurement error compared to those that signal fewer positions because we have more data on their true ideological preferences.
 
-# Simulation Study - Bayesian IRT
-
-::: {#fig-ideal-dag fig-cap="Bayesian IRT Measurement Model"}
+::: {#fig-ideal-dag fig-cap="IRT Measurement Model"}
 ```{=tex}
 \begin{Large}
 \begin{center}
 \tikz{
-    \node (theta_s) {$\theta^*$};
+    \node (theta_s) {$\bar{\theta}$};
     \node (theta_label) [right = 0 of theta_s] {$\textcolor{teal}{\text{\normalsize Estimated Ideal Point}}$};
     \node[hidden, dashed] (theta) [above = 1.5 of theta_s] {$\theta$};
     \node (theta_label) [above = .1 of theta] {$\textcolor{teal}{\text{\normalsize True Ideal Point}}$};
@@ -265,17 +182,16 @@ Measurement model errors can also take the form of classical measurement error. 
 ```
 :::
 
-In this section I will demonstrate, through simulations, how my method of constructing a joint measurement theory-testing model can help mitigate attenuation bias that arises from classic measurement error. @fig-ideal-dag shows the causal process which produces ideal point estimates, $\theta^*$ in a Bayesian IRT model. As in the BSIG case, our observed measurements come from an unobserved latent variable plus some measurement error. At least two variables can affect the measurement error, $e^{\theta}$ in @fig-ideal-dag. The true ideal point of the group, $\theta$ influences the amount of measurement error for estimates of the group's ideology because, as we move further from the ideological center of the scale, uncertainty increases. @fig-irt-dist shows an example of what the distribution of posterior estimates from a Bayesian IRT model look like. Groups further from the center have much wider ideal point posterior distributions. The second variable affecting $e^{\theta}$ is group participation, $P$---how often the group signals its position among the items in the model. Groups that signal more positions on items will have smaller levels of measurement error compared to groups that signal fewer positions because we have more data on their true ideological preferences.
+There is also likely unobserved measurement error in these types of models. IRT models assume each legislator's decision to vote on bill is influenced solely by their inner ideology, rather than on strategic concerns. A violation of this assumption, therefore, will produce biased estimates of $\bar{\theta}$. There are also computational issues with fitting IRT models which can make the posterior estimates untrustworthy. For the purposes of this illustration, however, I will assume that the posterior distribution, $e^{\theta}$ for $\bar{\theta}$ contains all relevant information about the measurement error for the true ideology $\theta$.
 
 ```{r}
 #| label: fig-irt-dist
-#| fig-cap: "Bayesian IRT Posterior Distributions"
-
-source(here::here("R", "sim_funcs.R"))
+#| fig-cap: "IRT Model Posterior Distributions"
 
 set.seed(100)
-
-sim_cont_data(500, noise_a = 2, true_b = 1)$dat |> 
+N <- 300
+tibble(x_meas = rnorm(N, sd = 1)) |> 
+  mutate(x_sd = abs(rnorm(n(), abs(x_meas), .25))) |> 
   arrange(x_meas) |> 
   mutate(id = row_number()) |> 
   ggplot(aes(x = x_meas, y = id)) +
@@ -290,12 +206,16 @@ sim_cont_data(500, noise_a = 2, true_b = 1)$dat |>
   theme(text = element_text(family = "serif"))
 ```
 
-::: {#fig-ideal-dag-theory fig-cap="Bayesian IRT Measurement Model in Hypothetical Theory-Testing Model"}
+Now let's expand @fig-ideal-dag into a theory-testing model with @fig-ideal-dag-theory. While there may exist some backdoor paths through $e^{\theta}$ and $P$ in this hypothetical theory-testing model, I will assume that the outcome of interest, $Y$ is unaffected by anything other than the direct causal effect $\bar{\theta} \longrightarrow Y$.[^2] The purpose of this simplification is to highlight the consequences of random measurement error during parameter estimation of a theory-testing model.
+
+[^2]: In principle, we could close any backdoor paths through $P$ by conditioning on it directly because the level of group participation is directly observed.
+
+::: {#fig-ideal-dag-theory fig-cap="IRT Measurement Model in Hypothetical Theory-Testing Model"}
 ```{=tex}
 \begin{Large}
 \begin{center}
 \tikz{
-    \node (theta_s) {$\theta^*$};
+    \node (theta_s) {$\bar{\theta}$};
     \node[hidden, dashed] (theta) [above = 1.5 of theta_s] {$\theta$};
     \node (e_theta) [left = 1.5 of theta_s] {$e^\theta$};
     \node (p) [below = 1.5 of e_theta] {$P$};
@@ -313,36 +233,33 @@ sim_cont_data(500, noise_a = 2, true_b = 1)$dat |>
 ```
 :::
 
-While there may exist some backdoor paths through $e^{\theta}$ and $P$ in a hypothetical theory-testing model, I will assume that the outcome of interest, $Y$ is unaffected by anything other than the direct causal effect $\theta^* \longrightarrow Y$.[^2] The purpose of this simplification is to highlight the consequences of random measurement error during parameter estimation of a theory-testing model. Using the generative causal model in @fig-ideal-dag-theory we can simulate data with a known parameter for the effect of group ideal point on the outcome $Y$. Then we fit two linear regression models to estimate this parameter, $\beta$. @eq-cont-no-me-model is the naive theory-testing model where $X_{\text{MEAS},i}$ corresponds to a group's mean ideal point estimate from the Bayesian IRT measurement model (see right panel of @fig-measurement-model). This is in contrast to the joint measurement theory-testing model in @eq-cont-me-model, which models $X_{\text{MEAS},i}$ as an outcome of $X_{\text{TRUE},i}$ (an unobserved parameter for each observation)[^3] and $X_{\text{SE},i}$ which is the observed standard deviation of the posterior distribution for each groups' ideal point. The estimates of $X_{\text{TRUE},i}$ are then used in the linear model which predicts the outcome $y_i$.
+### Simulation Study: Attenuation Bias
 
-[^2]: In principle, we could close any backdoor paths through $P$ by conditioning on it directly because the level of group participation is directly observed.
-
-[^3]: The parameters $X_{\text{TRUE},i}$ should not be confused with the true ideal points produced in the simulation. These true values are never seen by either model.
+Using the generative causal model in @fig-ideal-dag-theory we can simulate data with a known parameter for the effect, $\beta_1$ of legislator ideology on the outcome $Y$. Then we fit two linear regression models to estimate this parameter. @eq-cont-no-me-model is the naive theory-testing model where $\bar{\theta}_i$ corresponds to a legislator's mean ideal point estimate from the Bayesian IRT measurement model. This is in contrast to the joint measurement theory-testing model in @eq-cont-me-model, which models $\bar{\theta}_i$ as an outcome of the true ideology $\theta_i$ (an unobserved parameter for each observation) and $\sigma^2_{\theta [i]}$ which is the observed variance of the posterior distribution for each groups' ideal point. The parameters $\theta_i$ are also given hyperpriors $\pi$ and $\tau$ for location and scale respectively. The estimates of $\theta_i$ from this simplified measurement model are then used in the linear model which predicts the outcome $y_i$. These, and all other models in this paper, are written in the probabilistic programming language Stan and fit using the No-U-Turn (NUTS) MCMC sampler [@carpenter2017].
 
 $$
 \begin{aligned}
-  y_i &\sim \text{Normal}(\mu_i, \sigma) \\[-10pt]
-  \mu_i &= \alpha + \beta X_{\text{MEAS},i} \\[-10pt]
-  \alpha &\sim \text{Normal}(0, 2) \\[-10pt]
-  \beta &\sim \text{Normal}(0, 2) \\[-10pt]
+  y_i &\sim \text{Normal}(\mu_i, \sigma^2) \\[-10pt]
+  \mu_i &= \beta_0 + \beta_1 \bar{\theta}_i \\[-10pt]
+  \beta_0, \beta_1 &\sim \text{Normal}(0, 2) \\[-10pt]
   \sigma &\sim \text{Half Student t}(3, 0, 2) \\
 \end{aligned}
 $$ {#eq-cont-no-me-model}
 
 $$
 \begin{aligned}
-  y_i &\sim \text{Normal}(\mu_i, \sigma) \\[-10pt]
-  \mu_i &= \alpha + \beta X_{\text{TRUE},i} \\[-10pt]
-  X_{\text{MEAS},i} &\sim \text{Normal}(X_{\text{TRUE},i}, X_{\text{SE},i}) \\[-10pt]
-  X_{\text{TRUE}, i} &\sim \text{Normal}(0, \tau) \\[-10pt]
-  \alpha &\sim \text{Normal}(0, 2) \\[-10pt]
-  \beta &\sim \text{Normal}(0, 2) \\[-10pt]
+  y_i &\sim \text{Normal}(\mu_i, \sigma^2) \\[-10pt]
+  \mu_i &= \beta_0 + \beta_1 \bar{\theta}_{i} \\[-10pt]
+  \bar{\theta}_{i} &\sim \text{Normal}(\theta_i, \sigma^2_{\theta [i]}) \\[-10pt]
+  \theta_i &\sim \text{Normal}(\pi, \tau) \\[-10pt]
+  \beta_0, \beta_1 &\sim \text{Normal}(0, 2) \\[-10pt]
   \sigma &\sim \text{Half Student t}(3, 0, 2) \\[-10pt]
-  \tau &\sim \text{Half Student t}(3, 0, 2) \\
+  \tau &\sim \text{Half Student t}(3, 0, 2) \\[-10pt]
+  \pi &\sim \text{Normal}(0, 1)
 \end{aligned}
 $$ {#eq-cont-me-model}
 
-@fig-irt-sim-comparison shows how well each model recovers the true parameter value for $\beta$: the effect of the true ideal point on the simulated outcome. Each model was fit 40 times across a range of increasing random error levels (shown on the horizontal axis as the correlation between the simulated true ideal point and mean measurement error value approach zero). The mean posterior estimates of each model's $\beta$ parameter were then plotted using a loess fit. With little-to-no measurement error (left side of the graph), both models reliably recover the true $\beta$ value of 1. But as the random measurement error increases, the $\beta$ estimates from the naive model from @eq-cont-no-me-model rapidly attenuate towards zero. This is in contrast to the estimates from the joint measurement theory-testing model in @eq-cont-me-model which attenuate slightly but remain much closer to the true $\beta$ value even after there is essentially zero correlation between the true ideal points and means from the ideal points with measurement error.
+@fig-irt-sim-comparison shows how well each model recovers the true parameter value for $\beta_1$: the effect of the true ideal point on the simulated outcome. Each model was fit 40 times across a range of increasing random error levels (shown on the horizontal axis as the correlation between the simulated true ideal point and mean measurement error value approach zero). The mean, and 89% credible interval posterior estimates of each model's $\beta_1$ parameter are plotted with a loess fit. With little-to-no measurement error (left side of the graph), both models reliably recover the true $\beta_1$ value of 1. But as the random measurement error increases, the $\beta_1$ estimates from the naive model from @eq-cont-no-me-model rapidly attenuate towards zero. This is in contrast to the estimates from the joint measurement theory-testing model in @eq-cont-me-model which remain much closer to the true $\beta_1$ value even after there is essentially zero correlation between the true ideal points and means from the ideal points with measurement error.
 
 ```{r}
 #| label: fig-irt-sim-comparison
@@ -352,26 +269,196 @@ tar_load(cont_coef_plot)
 cont_coef_plot
 ```
 
-# Skew-Normal Distribution
+In addition to showing how the joint measurement theory-testing method can help avoid attenuation bias, the results from @fig-irt-sim-comparison show how this method more faithfully propagates measurement uncertainty into the theory-testing analysis. For each simulated model, the 89% credible intervals are wider for the measurement error model compared to the naive mean values model. These results demonstrate a dangerous combination of both increased bias, and increased certainty, in the theory-testing model if researchers neglect to incorporate the measurement model measurement error.
+
+## Measurement Error Confounding Bias
+
+The previous discussion of highlighted how failing to account for random measurement error could lead to attenuation bias. Next I will turn to the problem of measurement error-induced confounding bias. This general issue is also known as nonrandom, or unignorable, measurement error [@blalock1970]. In the political science methodology literature, methods such as multiple imputation [@blackwell2017] and sensitivity analysis [@gallop2019; @imai2010] have been developed to deal with nonrandom measurement error. My method is another way of dealing with nonrandom measurement error, but in the context where the measurement error is known and comes from the output of some measurement model.
+
+Building off from @fig-ideal-dag-theory, let's now consider the hypothetical causal graph shown in @fig-ideal-dag-theory-c. As before, the main causal effect of interest is represented by the path $\bar{\theta} \longrightarrow Y$. In order to get an unbiased estimate of this causal effect we need to close all backdoor paths leading from $\bar{\theta}$ to $Y$, which in this case, flows through the unobserved variable $U$. This confound represents anything that is a common cause of both the IRT model measurement error and the outcome of interest.
+
+::: {#fig-ideal-dag-theory-c fig-cap="IRT Measurement Model in Hypothetical Theory-Testing Model with Confounding"}
+```{=tex}
+\begin{Large}
+\begin{center}
+\tikz{
+    \node (theta_s) {$\bar{\theta}$};
+    \node[hidden, dashed] (theta) [above = 1.5 of theta_s] {$\theta$};
+    \node (e_theta) [left = 1.5 of theta_s] {$e^\theta$};
+    \node (p) [below = 1.5 of e_theta] {$P$};
+    \node (y) [right = 1.5 of theta_s] {$Y$};
+    \node[hidden, dashed] (u) [below = 1.5 of theta_s] {$U$};
+    \node (u_label) [below = 0 of u] {$\textcolor{teal}{\text{\normalsize Confound}}$};
+    
+    \path (e_theta) edge (theta_s);
+    \path (theta_s) edge (y);
+    \path[dashed] (theta) edge (theta_s);
+    \path (p) edge [bend left=0] (e_theta);
+    \path[dashed] (theta) edge [bend right=30] (e_theta);
+    \path[dashed] (u) edge [bend left = 30] (e_theta);
+    \path[dashed] (u) edge [bend right = 30](y);
+}
+\end{center}
+\end{Large}
+```
+:::
+
+For the theory-testing model in @fig-ideal-dag-theory-c it may be possible to directly condition on some variables in $U$ in order to obtain an unbiased estimate of $\bar{\theta} \longrightarrow Y$. But with something as multi-faceted as political ideology, there is always some risk of residual confounding. My proposed method of building a joint measurement and theory-testing model fixes this issue by obviating the need to deal with $U$ at all. This is because the measurement error, $e^\theta$ in @fig-ideal-dag-theory-c is part of the backdoor path from $\bar{\theta}$ to $Y$. Therefore when we explicitly incorporate $e^\theta$ into a model estimating $\bar{\theta} \longrightarrow Y$ we can obtain an unbiased---or at least less-biased, given unobserved measurement error---estimate of the causal effect of ideology on the theoretical outcome of interest.
+
+### Simulation Study: Confounding Bias
+
+In order to demonstrate how the joint measurement theory-testing method I propose handles non-ignorable measurement error, I carry out a simulation study similar to that in Section 2.1.1. Given the causal graph @fig-ideal-dag-theory-c, I generate data such that $Y$ is only a function of the unobserved confound $U$. The true effect of $\theta \longrightarrow Y$ is zero in the simulation. $\bar{\theta}$ is drawn from a Skew-Normal distribution whose location parameter, $\xi$ equals the true $\theta$ value, but whose skew parameter, $\alpha$ is a function of the confound $U$. This corresponds to the $U \longrightarrow e^\theta$ path in @fig-ideal-dag-theory-c.
+
+$$
+\begin{aligned}
+\frac{2}{\omega \sqrt{2 \pi}} e^{-\frac{(x-\xi)^2}{2\omega^2}} \int_{-\infty}^{\alpha\left(\frac{x-\xi}{\omega}\right)} \frac{1}{\sqrt{2 \pi}}  e^{-\frac{t^2}{2}}\ dt
+\end{aligned}
+$$ {#eq-skew-pdf}
+
+@eq-skew-pdf is the probability density function for the Skew-Normal distribution. The distribution is a convolution of the Normal distribution and Half Normal (or folded Normal) distribution and has three distributional parameters: $\xi$ for location, $\omega$ for scale, and $\alpha$ for skew. When $\alpha = 0$ the distribution collapses to the Normal distribution. Unfortunately there is not a closed form solution for finding the maximum likelihood estimates of the distributional parameters so numerical methods need to be used. In practice this leads to estimation instability as $\alpha$ approaches zero [@azzalini2014]. Because of this, a choice must be made ahead of time about whether to use the Skew-Normal or regular Normal distribution for the measurement model.
+
+After the data were generated I fit two models: the ordinary linear regression using only $\bar{\theta}$ values as used previously in the attenuation bias example (@eq-cont-no-me-model), and a modified version of @eq-cont-me-model which substitutes the Normal distribution for the Skew Normal distribution (@eq-cont-skew-model). As before, the key parameter of theoretical interest is $\beta_1$---which, according to the simulated data, should equal zero if unconfounded.
+
+$$
+\begin{aligned}
+  y_i &\sim \text{Normal}(\mu_i, \sigma^2) \\[-10pt]
+  \mu_i &= \beta_0 + \beta_1 \bar{\theta}_{i} \\[-10pt]
+  \bar{\theta}_{i} &\sim \text{Skew Normal}(\theta_i, \omega_{\theta[i]}, \alpha_{\theta[i]}) \\[-10pt]
+  \theta_i &\sim \text{Normal}(\pi, \tau) \\[-10pt]
+  \beta_0, \beta_1 &\sim \text{Normal}(0, 2) \\[-10pt]
+  \sigma &\sim \text{Half Student t}(3, 0, 2) \\[-10pt]
+  \tau &\sim \text{Half Student t}(3, 0, 2) \\[-10pt]
+  \pi &\sim \text{Normal}(0, 1)
+\end{aligned}
+$$ {#eq-cont-skew-model}
+
+@fig-skew-sim-comparison shows how well each model estimates $\beta_1$. As expected, the bottom model from @eq-cont-no-me-model using only the $\bar{\theta}$ values produces a biased estimate of $\beta_1$. The open backdoor path $\bar{\theta} \longleftarrow e^\theta \longleftarrow U \longrightarrow Y$ from @fig-ideal-dag-theory-c confounds the causal effect $\theta \longrightarrow Y$ if the latent variable was measured perfectly. In contrast, the top model from @eq-cont-skew-model accurately reports a $\beta_1$ coefficient value of zero. This is because the measurement error $e^\theta$ is included in the model in the form of $\alpha_{\theta[i]}$ for each observation.[^3] As in the attenuation bias example, the naive model's posterior for $\beta_1$ is also significantly narrower compared to the measurement error model. The measurement error model is faithfully propagating the uncertainty from the measurement process into the final theory-testing analysis.
+
+[^3]: The scale parameter $\omega_{\theta[i]}$ is also included in @eq-cont-skew-model to help avoid attenuation bias.
 
 ```{r}
+#| label: fig-skew-sim-comparison
+#| fig-cap: "Parameter Recovery Under Confounding"
+#| fig-height: 4
 tar_load(bias_coef_plot)
 bias_coef_plot
 ```
 
+# Case Study: Candidate Extremism and Electoral Success
 
-# Case Study: Does Political Extremism Affect Election Outcomes?
+The analysis in the previous section showed how a joint measurement theory-testing model can help avoid both attenuation and confounding bias stemming from measurement error. Simulation studies are powerful because we have complete control over the data generating process, and therefore know how well each model can recover the parameters which generated the outcome $Y$. The downside of simulation studies, however, is that they greatly simplify the complex social phenomena they aim to represent. With this in mind, I apply the proposed method to a real world example with ideology measurements from an IRT model.
+
+Are ideologically extreme US House incumbents punished electorally? According to the widely cited @canes-wrone2002, the answer is yes. While these authors use interest group scores to measure ideology, they discuss how their results remain the same when using DW-NOMINATE scores of ideology. DW-NOMINATE is a measurement model similar to IRT but without any uncertainty measurements. This makes it unsuitable for replication using the Bayesian method proposed here, so I instead re-estimate all US Representatives' ideology using the popular IRT model from the **pscl** R package [@R-pscl].
+
+Because this research question relies on observational data, it is important to sketch out a causal graph of the system in order to understand how to isolate the main effect. @fig-ree is one plausible causal graph of this system. The main effect of interest is $\bar{\theta} \longrightarrow Y$: measured candidate ideology's effect on vote share in the general election. As in the simulation study examples, $\bar{\theta}$ is a function of the candidate's true ideology, $\theta$ and error $e^\theta$. The confound $U$ between $e^\theta$ and $Y$ could represent a number of variables. Perhaps incumbent candidates who log-roll votes in Congress are seen as more, or less, effective representatives---thus influencing their future vote shares. But log-rolling would mean that the candidate's floor votes do not always represent their true ideology, thereby increasing the measurement error in the IRT model for that candidate.
+
+::: {#fig-ree fig-cap="Isolating the Effect of Ideology on General Election Vote Share"}
+```{=tex}
+\begin{Large}
+\begin{center}
+\tikz{
+    \node (theta_s) {$\bar{\theta}$};
+    \node[hidden, dashed] (theta) [above = 1.5 of theta_s] {$\theta$};
+    \node (e_theta) [left = 1.5 of theta_s] {$e^\theta$};
+    \node (y) [right = 1.5 of theta_s] {$Y$};
+    \node (y_label) [above = 0 of y] {$\textcolor{teal}{\text{\normalsize Incum. Vote \%}}$};
+    \node[hidden, dashed] (u) [below = 1.5 of theta_s] {$U$};
+    \node[hidden, dashed] (Theta) [above = 1.5 of y] {$\Theta$};
+    \node (Theta_label) [above = 0 of Theta] {$\textcolor{teal}{\text{\normalsize District Ideology}}$};
+    \node (r) [right = 1.5 of y] {$R$};
+    \node (r_label) [below = 0 of r] {$\textcolor{teal}{\text{\normalsize Repub. Pres. Vote \%}}$};
+    \node[hidden, dashed] (e_Theta) [right = 1.5 of r] {$e^\Theta$};
+    
+    \path (e_theta) edge (theta_s);
+    \path (theta_s) edge (y);
+    \path[dashed] (theta) edge (theta_s);
+    \path[dashed] (theta) edge [bend right=30] (e_theta);
+    \path[dashed] (u) edge [bend left = 30] (e_theta);
+    \path[dashed] (u) edge [bend right = 30](y);
+    \path[dashed] (Theta) edge (r);
+    \path (r) edge (y);
+    \path (e_Theta) edge (r);
+    \path[dashed] (Theta) edge (theta_s);
+}
+\end{center}
+\end{Large}
+```
+:::
+
+The other key confound in this causal system is district ideology, $\Theta$. @canes-wrone2002, and others who have asked similar research questions, are interested in whether ideologically extreme candidates, *relative to their district*, are punished electorally. A candidate who is considered extreme in one district might be considered moderate in another district. The effect $\Theta \longrightarrow \bar{\theta}$ represents this selection process, whereby candidates choose to run in districts with which they are already ideologically aligned. Unfortunately, district ideology, like candidate ideology, is not directly observed. Instead it is common practice to use an observed variable like district presidential vote share, $R$ as a proxy for district ideology. Presidential vote share is in no way a perfect measure of district ideology, hence the inclusion of $e^\Theta$ in @fig-ree.
+
+The data for this analysis came from a variety of sources. @lewis provided congressional votes for each year used to estimate the IRT ideology models for House representatives. Then, using the maximum likelihood estimator in the R package **sn** [@R-sn] I calculate the Normal and Skew-Normal distributional parameters from the IRT posterior estimates. These data were then merged with candidate information from @volden2014, which are in turn merged with presidential vote share data from @bensen. The final unit of observation in the data set is candidate-election, with candidate ideology lagged one Congress session so as to reflect the fact that legislator's district electorates should be responding to their previous actions in the House.
+
+I also split the data by party to make the main effects easier to interpret. Lower values from the IRT ideology measurement model correspond to more left-wing candidates, whereas higher values correspond to more right-wing candidates. So, for Democrats we interpret a positive relationship between ideology and vote share as district electorates favoring moderate candidates, whereas a positive relationship for Republican candidates would mean district electorates favor more extremists.
+
+$$
+\begin{aligned}
+  \text{VotePct}_i &\sim \text{Normal}(\mu_i, \sigma^2) \\[-10pt]
+  \mu_i &= \beta_0 + \beta_1 \bar{\theta}_{i} + \beta_2\text{R}_i\\[-10pt]
+  \beta_0 &\sim \text{Normal}(50, 5) \\[-10pt]
+  \beta_1, \beta_2 &\sim \text{Normal}(0, 2) \\[-10pt]
+  \sigma &\sim \text{Half Student t}(3, 0, 2)
+\end{aligned}
+$$ {#eq-ree-no-me-model}
+
+@eq-ree-no-me-model shows the simple linear regression without using a measurement error model for candidate ideology. @eq-ree-skew-model models the measurement error using the Skew-Normal distribution as discussed in the previous section. This attempts to handle both attenuation bias and confounding from $U$ in @fig-ree. Both models control for district Republican presidential vote share, $R$ to close the backdoor path $\bar{\theta} \longleftarrow \Theta \longrightarrow R \longrightarrow Y$. I also fit a random measurement error model using a Normal distribution in place of the Skew-Normal distribution in case there is no confounding from $U$, but omit the model equation for brevity.
+
+$$
+\begin{aligned}
+  \text{VotePct}_i &\sim \text{Normal}(\mu_i, \sigma^2) \\[-10pt]
+  \mu_i &= \beta_0 + \beta_1 \bar{\theta}_{i} + \beta_2\text{R}_i\\[-10pt]
+  \bar{\theta}_{i} &\sim \text{Skew Normal}(\theta_i, \omega_{\theta[i]}, \alpha_{\theta[i]}) \\[-10pt]
+  \theta_i &\sim \text{Normal}(\pi, \tau) \\[-10pt]
+  \beta_0 &\sim \text{Normal}(50, 5) \\[-10pt]
+  \beta_1, \beta_2 &\sim \text{Normal}(0, 2) \\[-10pt]
+  \sigma &\sim \text{Half Student t}(3, 0, 2) \\[-10pt]
+  \tau &\sim \text{Half Student t}(3, 0, 2) \\[-10pt]
+  \pi &\sim \text{Normal}(0, 2)
+\end{aligned}
+$$ {#eq-ree-skew-model}
+
+@fig-ree-betas shows the posterior distributions for $\beta_1$ in the above models. For Democrats (top panel), there does not appear to be a strong relationship between incumbent ideology and their electoral success. Both the Normal measurement error model and mean-only model coefficients are centered around zero. Using the Skew-Normal measurement error model, however, there appears to be some evidence that centrist Democrats perform worse electorally compared to more liberal Democrats. For Republicans (bottom panel), all models agree that more extremist candidates perform better. The fact that both measurement error models predict larger electoral gains from moving rightward suggests that there may be some attenuation bias taking place in the mean-only model.
 
 ```{r}
+#| label: fig-ree-betas
+#| fig-cap: "The Effect of Legislator Ideology on Vote Share in Next Election"
+#| fig-height: 4
 tar_load(reelection_coef_plot)
 reelection_coef_plot
 ```
 
+# Extensions
 
-## Extension Skew-t
+## Skew-t Distribution
 
-## Importance of gibbs vs HMC vs no uncertainty
+## Measurement Error Validity
 
+One of the key takeaways from this project is the importance of accounting for measurement error in theory testing. The posterior distribution generated by measurement models contains valuable information about this error but is often discarded. Unobserved measurement error, however, can also have an independent effect on latent variables (see @fig-me). If this unobserved error outweighs the observed error, the effectiveness of the joint measurement theory-testing method proposed in this paper may be diminished. Therefore, it is important to estimate the measurement model posterior distribution as accurately as possible.
+
+::: {#fig-me fig-cap="Total Measurement Error"}
+```{=tex}
+\begin{Large}
+\begin{center}
+\tikz{
+    \node (theta_s) {$\bar{\theta}$};
+    \node[hidden, dashed] (theta) [above = 1.5 of theta_s] {$\theta$};
+    \node (e_theta) [below left = 1.5 of theta_s] {$e^\theta$};
+    \node (e_theta_label) [below = 0 of e_theta] {$\textcolor{teal}{\text{\normalsize Observed Error}}$};
+    \node[hidden, dashed] (eo_theta) [below right = 1.5 of theta_s] {$e^\theta$};
+    \node (eo_theta_label) [below = 0.2 of eo_theta] {$\textcolor{teal}{\text{\normalsize Unobserved Error}}$};
+    
+    \path (e_theta) edge (theta_s);
+    \path[dashed] (theta) edge (theta_s);
+    \path[dashed] (eo_theta) edge (theta_s);
+}
+\end{center}
+\end{Large}
+```
+:::
+
+Social scientists should therefore be aware of recent computational advancements in Bayesian posterior estimation, particularly the superiority of Hamiltonian Monte Carlo (HMC) samplers over traditional Gibbs samplers (such as the one used in the **pscl** R package). HMC methods enable more accurate and efficient handling of high dimensional parameter spaces [@betancourt2018]---of which IRT models are a prime example. Gibbs samplers also lack the sophisticated suite of diagnostic tools that come with HMC. This means that convergence issues, and therefore poor posterior exploration, may go undetected.
+
+In the same vein as using the best computational sampling methods, this project highlights why latent variables whose measurement models produce uncertainty estimates should be prefered over those that do not. The methodological competitor to IRT models for measuring political ideology is NOMINATE, which uses multidimensional scaling rather than Bayesian estimation. This optimization method does not provide explicit estimates of uncertainty, much less a full posterior distribution of plausible values the latent variable could take. All of NOMINATE's measurement error is therefore in the unobserved category. For the reasons discussed previously, this raises concerns about attenuation bias and/or confounding bias when using NOMINATE values in a theory-testing model.
 
 \newpage
 
