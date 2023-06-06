@@ -126,7 +126,7 @@ Let's say we want to estimate the effect of legislator ideology, $\theta$, on so
 
 $$
 \begin{aligned}
-  y_i &\sim \text{Normal}(\beta_0 + \theta_i \beta_1, \sigma^2) \\
+  y_i &\sim \text{Normal}(\beta_0 + \beta_1 \theta_i, \sigma^2) \\
   y^*_{ij} &\sim \text{Bernoulli}[\Phi(\gamma_j\theta_i + \xi_i)] \\
 \end{aligned}
 $$ {#eq-irt}
@@ -135,7 +135,7 @@ As mentioned previously, however, estimating @eq-irt would not generally be feas
 
 $$
 \begin{aligned}
-  y_i &\sim \text{Normal}(\beta_0 + \beta_1 \bar{\theta}_i, \sigma^2) \\
+  y_i &\sim \text{Normal}(\beta_0 + \beta_1 \theta_i, \sigma^2) \\
   \bar{\theta}_i &\sim \text{Normal}(\theta_i, \sigma^2_{\theta [i]})
 \end{aligned}
 $$ {#eq-irt-me}
@@ -249,8 +249,8 @@ $$ {#eq-cont-no-me-model}
 $$
 \begin{aligned}
   y_i &\sim \text{Normal}(\mu_i, \sigma^2) \\[-10pt]
-  \mu_i &= \beta_0 + \beta_1 \bar{\theta}_{i} \\[-10pt]
-  \bar{\theta}_{i} &\sim \text{Normal}(\theta_i, \sigma^2_{\theta [i]}) \\[-10pt]
+  \mu_i &= \beta_0 + \beta_1 \theta_i \\[-10pt]
+  \bar{\theta}_i &\sim \text{Normal}(\theta_i, \sigma^2_{\theta [i]}) \\[-10pt]
   \theta_i &\sim \text{Normal}(\pi, \tau) \\[-10pt]
   \beta_0, \beta_1 &\sim \text{Normal}(0, 2) \\[-10pt]
   \sigma &\sim \text{Half Student t}(3, 0, 2) \\[-10pt]
@@ -322,7 +322,7 @@ After the data were generated I fit two models: the ordinary linear regression u
 $$
 \begin{aligned}
   y_i &\sim \text{Normal}(\mu_i, \sigma^2) \\[-10pt]
-  \mu_i &= \beta_0 + \beta_1 \bar{\theta}_{i} \\[-10pt]
+  \mu_i &= \beta_0 + \beta_1 \theta_i \\[-10pt]
   \bar{\theta}_{i} &\sim \text{Skew Normal}(\theta_i, \omega_{\theta[i]}, \alpha_{\theta[i]}) \\[-10pt]
   \theta_i &\sim \text{Normal}(\pi, \tau) \\[-10pt]
   \beta_0, \beta_1 &\sim \text{Normal}(0, 2) \\[-10pt]
@@ -406,7 +406,7 @@ $$ {#eq-ree-no-me-model}
 $$
 \begin{aligned}
   \text{VotePct}_i &\sim \text{Normal}(\mu_i, \sigma^2) \\[-10pt]
-  \mu_i &= \beta_0 + \beta_1 \bar{\theta}_{i} + \beta_2\text{R}_i\\[-10pt]
+  \mu_i &= \beta_0 + \beta_1 \theta_i + \beta_2\text{R}_i\\[-10pt]
   \bar{\theta}_{i} &\sim \text{Skew Normal}(\theta_i, \omega_{\theta[i]}, \alpha_{\theta[i]}) \\[-10pt]
   \theta_i &\sim \text{Normal}(\pi, \tau) \\[-10pt]
   \beta_0 &\sim \text{Normal}(50, 5) \\[-10pt]
