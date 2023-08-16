@@ -1,0 +1,542 @@
+---
+title: "Going Beyond Ideal Point Points: Modeling Measurement Model Measurement Error"
+subtitle: "AP Retreat"
+author: "Bertrand Wilden"
+date: \today
+output: binb::metropolis
+header-includes:
+   - \usepackage{tikz}
+   - \usetikzlibrary{positioning}
+   - \usepackage{xcolor}
+fontsize: 12pt
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE, cache.lazy = FALSE)
+
+pacman::p_load(
+  "tidyverse",
+  "here",
+  "patchwork",
+  "targets",
+  "kableExtra",
+  "tidybayes",
+  "ggdist",
+  "MetBrewer",
+  "targets"
+)
+
+options(scipen = 1, digits = 3)
+```
+
+##
+
+**Overview**
+
+- Latent variables (e.g. political ideology) are often measured using statistical models
+
+- When using these variables in downstream analysis, bias can occur if measurement uncertainty is ignored
+
+- I develop a method for fixing this
+
+##
+
+**Measurement Models**
+
+- Used to measure latent variables: *ideology, corruption, democracy, racial resentment*
+- Example model: item response theory (IRT) ideal point model
+
+**Theory-Testing Models**
+
+- Testing a causal theory: *being an ideologically extreme candidate hurts one's reelection chances*
+- Example model: regression with controls
+
+## 
+
+**Bayesian Measurement Models**
+
+- Output is a full posterior distribution of values for the latent variable according to their relative plausibility
+
+- In practice, only a point estimate such as mean or median is used is subsequent analyses
+
+##
+
+```{r}
+N <- 10000
+tibble(x = c(rnorm(N, sd = 1),
+             rnorm(N, sd = 2),
+             sn::rsn(N, alpha = -4, omega = 2, xi = 1.5),
+             sn::rst(N, xi = -2.75, omega = 2, alpha = 4, nu = 1)),
+       y = c(rep("A\nNormal(0, 1)", N), 
+             rep("B\nNormal(0, 2)", N), 
+             rep("C\nSkew Normal(1.5, 2, -4)", N), 
+             rep("D\nSkew t(-2.75, 2, 4, 1)", N))) |> 
+  ggplot(aes(x = x)) +
+  geom_histogram(color = "white", fill = "darkcyan", alpha = .5, bins = 50) +
+  geom_vline(xintercept = 0, linetype = "twodash", color = "black", linewidth = .7) +
+  # geom_text(aes(label = y), x = -4, y = 0) +
+  facet_wrap(~ y, nrow = 2) +
+  xlim(-5, 5) +
+  theme_ggdist() +
+  labs(y = "", x = "", caption = "Four different measurement model posterior distributions with mean zero") +
+  theme(axis.line.y = element_blank(),
+        axis.text.y = element_blank(),
+        axis.ticks.y = element_blank(),
+        strip.text.x = element_text(size = 18),
+        plot.title = element_text(hjust = .5, size = 24),
+        text = element_text(family = ""),
+        axis.text = element_text(size = 16),
+        axis.title = element_text(size = 20),
+        plot.caption = element_text(size = 18),
+        plot.background = element_rect(fill = "#FAFAFA", color = "#FAFAFA"),
+        panel.background = element_rect(fill = "#FAFAFA", color = "#FAFAFA"))
+```
+
+
+##
+
+**Three Problems With Ignoring Measurement Model Uncertainty**
+
+::: incremental
+  1. Uncertainty is not properly propagated in theory-testing models using point estimates
+    - ***Coefficient uncertainty is underestimated***
+  2. There is too much random noise in the point estimates
+    - ***Coefficients are biased towards zero***
+  3. Possibility of backdoor confounding through the measurement process
+    - ***Coefficients are biased in unpredictable ways***
+:::
+
+
+## 
+
+\centering
+
+\textbf{Solution: Joint Bayesian Measurement Error Model}
+
+\raggedright
+
+\begin{equation*}
+\begin{aligned}
+   y_i  &\sim f(\theta_i) \\
+   y^{*}_i &\sim g(\theta_i)
+\end{aligned}
+\end{equation*}
+
+- $y$, outcome in theory-testing model
+- $\theta$, latent variable
+- $y^*$, training data in measurement model
+- $f(\cdot)$, theory-testing model
+- $g(\cdot)$, measurement model
+
+## 
+
+**Simplifications**
+
+::: incremental
+- Applied researchers know a lot about $f(\cdot)$, but not $g(\cdot)$
+- The real $g(\cdot)$ can take a lot of computation time
+- My solution is to use an approximation of $g(\cdot)$ that fits the measurement error posterior distribution
+:::
+
+##
+
+\centering
+
+\textbf{Joint IRT Ideal Point Measurement Error Model}
+
+\raggedright
+
+\begin{equation*}
+\begin{aligned}
+  y_i &\sim \text{Normal}(\beta_0 + \beta_1 \textcolor{teal}{\theta_i}, \sigma^2) \\
+  y^*_{ij} &\sim \text{Bernoulli}[\Phi(\gamma_j\textcolor{teal}{\theta_i} + \xi_i)] \\
+\end{aligned}
+\end{equation*}
+
+Is simplified as:
+
+\begin{equation*}
+\begin{aligned}
+  y_i &\sim \text{Normal}(\beta_0 + \beta_1 \textcolor{teal}{\theta_i}, \sigma^2) \\
+  \bar{\theta}_i &\sim \text{Normal}(\textcolor{teal}{\theta_i}, \sigma^2_{\theta [i]})
+\end{aligned}
+\end{equation*}
+
+- $\bar{\theta}_i$, posterior mean from measurement model
+- $\sigma^2_{\theta [i]}$, posterior variance from measurement model
+
+# Measurement Error and Attenuation Bias
+
+##
+
+**Measurement Model**
+
+\tikzset{
+    > = stealth,
+    every node/.append style = {
+        draw = none
+    },
+    every path/.append style = {
+        arrows = ->
+    },
+    hidden/.style = {
+        draw = black,
+        shape = circle,
+        inner sep = 1pt
+    }
+}
+
+\begin{Large}
+\begin{center}
+\tikz{
+    \node (theta_s) {$\bar{\theta}$};
+    \node (theta_label) [right = 0 of theta_s] {$\textcolor{teal}{\text{\normalsize Estimated Ideal Point}}$};
+    \node[hidden, dashed] (theta) [above = 1.5 of theta_s] {$\theta$};
+    \node (theta_label) [above = .1 of theta] {$\textcolor{teal}{\text{\normalsize True Ideal Point}}$};
+    \node (e_theta) [left = 1.5 of theta_s] {$e^\theta$};
+    \node (e_theta_label) [left = 0 of e_theta] {$\textcolor{teal}{\text{\normalsize Measurement Error}}$};
+    \node (p) [below = 1.5 of e_theta] {$P$};
+    \node (p_label) [below = 0 of p] {$\textcolor{teal}{\text{\normalsize Participation}}$};
+    
+    \path (e_theta) edge (theta_s);
+    \path[dashed] (theta) edge (theta_s);
+    \path (p) edge [bend left=0] (e_theta);
+    \path[dashed] (theta) edge [bend right=30] (e_theta);
+}
+\end{center}
+\end{Large}
+
+##
+
+**Theory-testing Model**
+
+\tikzset{
+    > = stealth,
+    every node/.append style = {
+        draw = none
+    },
+    every path/.append style = {
+        arrows = ->
+    },
+    hidden/.style = {
+        draw = black,
+        shape = circle,
+        inner sep = 1pt
+    }
+}
+
+\begin{Large}
+\begin{center}
+\tikz{
+    \node (theta_s) {$\bar{\theta}$};
+    \node[hidden, dashed] (theta) [above = 1.5 of theta_s] {$\theta$};
+    \node (e_theta) [left = 1.5 of theta_s] {$e^\theta$};
+    \node (p) [below = 1.5 of e_theta] {$P$};
+    \node (y) [right = 1.5 of theta_s] {$Y$};
+    \node (y_label) [above = 0 of y] {$\textcolor{teal}{\text{\normalsize Outcome}}$};
+    
+    \path (e_theta) edge (theta_s);
+    \path (theta_s) edge (y);
+    \path[dashed] (theta) edge (theta_s);
+    \path (p) edge [bend left=0] (e_theta);
+    \path[dashed] (theta) edge [bend right=30] (e_theta);
+}
+\end{center}
+\end{Large}
+
+##
+
+**Simulation Study**
+
+:::incremental
+1. Generate latent variable distributions from true $\theta_i$
+2. Generate outcome $y_i$ as a function of true $\theta_i$
+3. Use maximum likelihood to estimate distributional parameters (mean, variance, skew) from step 1 for use in simplified measurement model
+4. Compare parameter recovery using a mean-only model and a joint measurement error model
+:::
+
+##
+
+\textbf{Mean-Only Model}
+
+\begin{equation*}
+\begin{aligned}
+  y_i &\sim \text{Normal}(\mu_i, \sigma^2) \\
+  \mu_i &= \beta_0 + \beta_1 \textcolor{brown}{\bar{\theta}_i} \\
+  \beta_0, \beta_1 &\sim \text{Normal}(0, 2) \\
+  \sigma &\sim \text{Half Student t}(3, 0, 2) \\
+\end{aligned}
+\end{equation*}
+
+##
+
+\textbf{Joint Measurement Error Model}
+
+\begin{equation*}
+\begin{aligned}
+  y_i &\sim \text{Normal}(\mu_i, \sigma^2) \\
+  \mu_i &= \beta_0 + \beta_1 \textcolor{teal}{\theta_i} \\
+  \textcolor{teal}{\bar{\theta}_i} &\textcolor{teal}{\sim \text{Normal}(\theta_i, \sigma^2_{\theta [i]})} \\
+  \textcolor{teal}{\theta_i} &\textcolor{teal}{\sim \text{Normal}(\pi, \tau)} \\
+  \beta_0, \beta_1 &\sim \text{Normal}(0, 2) \\
+  \sigma &\sim \text{Half Student t}(3, 0, 2) \\
+  \textcolor{teal}{\tau} &\textcolor{teal}{\sim \text{Half Student t}(3, 0, 2)} \\
+  \textcolor{teal}{\pi} &\textcolor{teal}{\sim \text{Normal}(0, 1)}
+\end{aligned}
+\end{equation*}
+
+##
+
+```{r}
+tar_load(me_cont)
+tar_load(no_me_cont)
+true = 1
+
+coefs = rbind(me_cont, no_me_cont) |> 
+    mutate(model_name = case_when(model_name == "Mean Values Only" ~ "Mean Only Model",
+                                  model_name == "Measurement Error" ~ "Measurement Error Model"))
+```
+
+
+```{r}
+coefs |> 
+  filter(model_name == "Mean Only Model") |> 
+    ggplot(aes(x = corr_x, y = mean, color = model_name)) +
+    geom_smooth(n = 8, fill = "gray", level = 0.89) +
+    geom_pointrange(aes(ymin = `5.5%`, ymax = `94.5%`), size = .6) +
+    geom_hline(yintercept = true, linetype = "dashed") +
+    geom_hline(yintercept = 0, linetype = "dashed") +
+    theme_ggdist() +
+    scale_y_continuous(breaks = c(0, .5, 1), limits = c(-.1, 1.4)) +
+    scale_x_reverse(limits = c(1, 0)) +
+    labs(y = "Coefficient Estimate", x = "Correlation Between True Ideal Point and\nMean Measurement Error Ideal Point",
+         color = "Model Type", caption = paste("True Coefficient Value =", true)) +
+  theme(text = element_text(family = ""),
+        axis.text = element_text(size = 16),
+        axis.title = element_text(size = 20),
+        legend.text = element_text(size = 20),
+        legend.title = element_text(size = 20),
+        plot.caption = element_text(size = 16),
+        legend.position = "top",
+        plot.background = element_rect(fill = "#FAFAFA", color = "#FAFAFA"),
+        panel.background = element_rect(fill = "#FAFAFA", color = "#FAFAFA"),
+        legend.background = element_rect(fill = "#FAFAFA", color = "#FAFAFA"))+
+  scale_color_manual(values = MetPalettes$Isfahan1[[1]][2])
+```
+
+##
+
+```{r}
+coefs |> 
+    ggplot(aes(x = corr_x, y = mean, color = model_name)) +
+    geom_smooth(n = 8, fill = "gray", level = 0.89) +
+    geom_pointrange(aes(ymin = `5.5%`, ymax = `94.5%`), size = .6) +
+    geom_hline(yintercept = true, linetype = "dashed") +
+    geom_hline(yintercept = 0, linetype = "dashed") +
+    theme_ggdist() +
+    scale_color_met_d("Isfahan1") +
+    scale_x_reverse(limits = c(1, 0)) +
+    labs(y = "Coefficient Estimate", x = "Correlation Between True Ideal Point and\nMean Measurement Error Ideal Point",
+         color = "Model Type", caption = paste("True Coefficient Value =", true)) +
+  theme(text = element_text(family = ""),
+        axis.text = element_text(size = 16),
+        axis.title = element_text(size = 20),
+        legend.text = element_text(size = 20),
+        legend.title = element_text(size = 20),
+        plot.caption = element_text(size = 16),
+        legend.position = "top",
+        plot.background = element_rect(fill = "#FAFAFA", color = "#FAFAFA"),
+        panel.background = element_rect(fill = "#FAFAFA", color = "#FAFAFA"),
+        legend.background = element_rect(fill = "#FAFAFA", color = "#FAFAFA"))
+```
+
+# Measurement Error and Confounding Bias
+
+##
+
+**Theory-testing Model**
+
+\tikzset{
+    > = stealth,
+    every node/.append style = {
+        draw = none
+    },
+    every path/.append style = {
+        arrows = ->
+    },
+    hidden/.style = {
+        draw = black,
+        shape = circle,
+        inner sep = 1pt
+    }
+}
+
+\begin{Large}
+\begin{center}
+\tikz{
+    \node (theta_s) {$\bar{\theta}$};
+    \node[hidden, dashed] (theta) [above = 1.5 of theta_s] {$\theta$};
+    \node (e_theta) [left = 1.5 of theta_s] {$e^\theta$};
+    \node (p) [below = 1.5 of e_theta] {$P$};
+    \node (y) [right = 1.5 of theta_s] {$Y$};
+    \node[hidden, dashed] (u) [below = 1.5 of theta_s] {$U$};
+    \node (u_label) [below = 0 of u] {$\textcolor{teal}{\text{\normalsize Confound}}$};
+    
+    \path (e_theta) edge (theta_s);
+    \path (theta_s) edge (y);
+    \path[dashed] (theta) edge (theta_s);
+    \path (p) edge [bend left=0] (e_theta);
+    \path[dashed] (theta) edge [bend right=30] (e_theta);
+    \path[dashed] (u) edge [bend left = 30] (e_theta);
+    \path[dashed] (u) edge [bend right = 30](y);
+}
+\end{center}
+\end{Large}
+
+##
+
+\textbf{Skew-Normal Joint Measurement Error Model}
+
+\begin{equation*}
+\begin{aligned}
+  y_i &\sim \text{Normal}(\mu_i, \sigma^2) \\
+  \mu_i &= \beta_0 + \beta_1 \theta_i \\
+  \textcolor{teal}{\bar{\theta}_i} &\textcolor{teal}{\sim \text{Skew Normal}(\theta_i, \omega_{\theta[i]}, \alpha_{\theta[i]})} \\
+  \theta_i &\sim \text{Normal}(\pi, \tau) \\
+  \beta_0, \beta_1 &\sim \text{Normal}(0, 2) \\
+  \sigma &\sim \text{Half Student t}(3, 0, 2) \\
+  \tau &\sim \text{Half Student t}(3, 0, 2) \\
+  \pi &\sim \text{Normal}(0, 1)
+\end{aligned}
+\end{equation*}
+
+##
+
+**Skew-Normal Measurement Error Model Comparison**
+
+```{r}
+tar_load(bias_coef_plot)
+bias_coef_plot +
+  theme(text = element_text(family = ""),
+        axis.text = element_text(size = 20),
+        axis.title = element_text(size = 20),
+        plot.caption = element_text(size = 18),
+        plot.background = element_rect(fill = "#FAFAFA", color = "#FAFAFA"),
+        panel.background = element_rect(fill = "#FAFAFA", color = "#FAFAFA"),
+        legend.background = element_rect(fill = "#FAFAFA", color = "#FAFAFA"))
+```
+
+# Case Study: Ideological Extremism and Electoral Success
+
+##
+
+**Research Question:** are ideologically extreme US House incumbents punished electorally?
+
+- DV: General election vote share
+- IV: Ideology estimated from previous Congress roll-call votes
+- Data from 1990 to 2016
+
+##
+
+\tikzset{
+    > = stealth,
+    every node/.append style = {
+        draw = none
+    },
+    every path/.append style = {
+        arrows = ->
+    },
+    hidden/.style = {
+        draw = black,
+        shape = circle,
+        inner sep = 1pt
+    }
+}
+
+\begin{Large}
+\begin{center}
+\tikz{
+    \node (theta_s) {$\bar{\theta}$};
+    \node[hidden, dashed] (theta) [above = 1.5 of theta_s] {$\theta$};
+    \node (e_theta) [left = 1.5 of theta_s] {$e^\theta$};
+    \node (y) [right = 1.5 of theta_s] {$Y$};
+    \node (y_label) [above = 0 of y] {$\textcolor{teal}{\text{\normalsize Incum. Vote \%}}$};
+    \node[hidden, dashed] (u) [below = 1.5 of theta_s] {$U$};
+    \node[hidden, dashed] (Theta) [above = 1.5 of y] {$\Theta$};
+    \node (Theta_label) [above = 0 of Theta] {$\textcolor{teal}{\text{\normalsize District Ideology}}$};
+    \node (r) [right = 1.5 of y] {$R$};
+    \node (r_label) [below = 0 of r] {$\textcolor{teal}{\text{\normalsize Repub. Pres. Vote \%}}$};
+    \node[hidden, dashed] (e_Theta) [right = 1.5 of r] {$e^\Theta$};
+    
+    \path (e_theta) edge (theta_s);
+    \path (theta_s) edge (y);
+    \path[dashed] (theta) edge (theta_s);
+    \path[dashed] (theta) edge [bend right=30] (e_theta);
+    \path[dashed] (u) edge [bend left = 30] (e_theta);
+    \path[dashed] (u) edge [bend right = 30](y);
+    \path[dashed] (Theta) edge (r);
+    \path (r) edge (y);
+    \path (e_Theta) edge (r);
+    \path[dashed] (Theta) edge (theta_s);
+}
+\end{center}
+\end{Large}
+
+##
+
+**Effect of Incumbent Ideology on General Election Vote Share**
+
+```{r}
+tar_load(reelection_coef_plot)
+reelection_coef_plot +
+  theme(text = element_text(family = ""),
+        axis.text = element_text(size = 20),
+        axis.title = element_text(size = 20),
+        plot.caption = element_text(size = 18),
+        strip.text = element_text(size = 18),
+        plot.background = element_rect(fill = "#FAFAFA", color = "#FAFAFA"),
+        panel.background = element_rect(fill = "#FAFAFA", color = "#FAFAFA"),
+        legend.background = element_rect(fill = "#FAFAFA", color = "#FAFAFA"))
+```
+
+# Concluding Thoughts
+
+##
+
+- Uncertainty estimation matters
+  - Better to use measurement models that provide uncertainty estimates than those that don't (eg NOMINATE)
+  - Better to use state-of-the-art posterior sampling methods such as Hamiltonian Monte Carlo, rather than traditional Gibbs samplers for measurement models
+
+\tikzset{
+    > = stealth,
+    every node/.append style = {
+        draw = none
+    },
+    every path/.append style = {
+        arrows = ->
+    },
+    hidden/.style = {
+        draw = black,
+        shape = circle,
+        inner sep = 1pt
+    }
+}
+
+\begin{normalsize}
+\begin{center}
+\tikz{
+    \node (theta_s) {$\bar{\theta}$};
+    \node[hidden, dashed] (theta) [above = 1 of theta_s] {$\theta$};
+    \node (e_theta) [left = 1.5 of theta_s] {$e^\theta$};
+    \node (e_theta_label) [below = 0 of e_theta] {$\textcolor{teal}{\text{\normalsize Observed Error}}$};
+    \node[hidden, dashed] (eo_theta) [right = 1.5 of theta_s] {$e^\theta$};
+    \node (eo_theta_label) [below = 0 of eo_theta] {$\textcolor{teal}{\text{\normalsize Unobserved Error}}$};
+    
+    \path (e_theta) edge (theta_s);
+    \path[dashed] (theta) edge (theta_s);
+    \path[dashed] (eo_theta) edge (theta_s);
+}
+\end{center}
+\end{normalsize}
+
+# Thank you!
