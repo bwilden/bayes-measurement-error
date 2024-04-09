@@ -147,7 +147,7 @@ sim_bias_cont_data <- function(N, true_b = 0, bias = 0) {
 # broom::tidy(lm(y ~ x_meas + u, data = d))
 
 
-sim_bias_dist_data <- function(N, n_draws = 1000, true_b = 0, bias) {
+sim_bias_dist_data <- function(N, n_draws = 10000, true_b = 0, bias) {
   dat <- tibble(
     unit = as.character(1:N),
     x = rnorm(N),

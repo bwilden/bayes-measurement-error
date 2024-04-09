@@ -107,7 +107,7 @@ list(
   # Bias ME
   tar_target(
     bias_data,
-    sim_bias_dist_data(1000, true_b = 0, bias = 10)
+    sim_bias_dist_data(N = 1000, true_b = 0, bias = 10)
   ),
   tar_stan_mcmc(
     me_cont_bias,
@@ -162,15 +162,15 @@ list(
     votes_rc,
     prep_votes_rc(raw_votes, raw_legis, congress_list = 102:117)
   ),
-  tar_target(
-    votes_irt,
-    map(votes_rc$votes_list,
-        fit_brms_irt)
-  ),
   # tar_target(
   #   votes_irt,
-  #   fit_brms_irt(votes_rc$votes_list[[1]])
+  #   map(votes_rc$votes_list,
+  #       fit_brms_irt)
   # ),
+  tar_target(
+    votes_irt,
+    fit_brms_irt(votes_rc$votes_list[[1]])
+  ),
   tar_target(
     votes_ideal,
     map(votes_rc$votes_list_rc,
@@ -243,8 +243,8 @@ list(
   ),
   tar_target(
     test_d,
-    legis_ideal[[1]] |> 
-      filter(alpha < 3, alpha > -3)
+    legis_ideal[[1]] 
+      # filter(alpha < 3, alpha > -3)
   ),
   tar_stan_mcmc(
     dems_skew,
@@ -253,15 +253,15 @@ list(
       N = nrow(test_d),
       x_obs = test_d$mu,
       x_sd = test_d$omega,
-      x_skew = test_d$alpha/2,
+      x_skew = test_d$alpha,
       control = test_d$r_vote_pct,
       y = test_d$vote_pct),
     init = 0
   ),
   tar_target(
     test_r,
-    legis_ideal[[2]] |> 
-      filter(alpha > -3, alpha < 3)
+    legis_ideal[[2]] 
+      # filter(alpha > -3, alpha < 3)
   ),
   tar_stan_mcmc(
     reps_skew,
@@ -270,7 +270,7 @@ list(
       N = nrow(test_r),
       x_obs = test_r$mu,
       x_sd = test_r$omega,
-      x_skew = test_r$alpha/2,
+      x_skew = test_r$alpha,
       control = test_r$r_vote_pct,
       y = test_r$vote_pct),
     init = 0

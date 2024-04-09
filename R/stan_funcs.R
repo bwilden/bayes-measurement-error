@@ -20,13 +20,13 @@ fit_brms_irt <- function(data_df) {
     data = data_df,
     family = bernoulli(link = "probit"),
     prior = 
-      prior(normal(0, 2), class = b, nlpar = beta) +
-      prior(normal(0, 1), class = b, nlpar = theta) +
-      prior(normal(0, 2), class = b, nlpar = gamma) +
-      prior(cauchy(0, 2), class = sd, nlpar = theta) +
+      prior(normal(0, 3), class = b, nlpar = beta) +
+      prior(normal(0, 2), class = b, nlpar = theta) +
+      prior(normal(0, 3), class = b, nlpar = gamma) +
+      prior(cauchy(0, 3), class = sd, nlpar = theta) +
       prior(constant(1), class = sd, nlpar = gamma) +
-      prior(cauchy(0, 2), class = sd, nlpar = beta) +
-      prior(constant(.5), class = b, coef = republican, nlpar = gamma),
+      prior(cauchy(0, 3), class = sd, nlpar = beta) +
+      prior(lognormal(-1, .5), class = b, coef = republican, nlpar = gamma),
     chains = 4,
     cores = 8,
     iter = 2000,
