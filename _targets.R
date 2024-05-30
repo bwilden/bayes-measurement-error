@@ -130,162 +130,162 @@ list(
     stan_file = here("stan", "sim", "skewt.stan"),
     data = list(N = 10000,
                 x = sn::rsn(10000, xi = 0, omega = 1, alpha = 0.1))
-  ),
+  )
   
   # House Re-election Analysis
-  tar_target(
-    raw_votes,
-    here::here("data-raw", "Hall_votes.csv"),
-    format = "file"
-  ),
-  tar_target(
-    raw_legis,
-    here::here("data-raw", "CELHouse93to117Classic-1.xls"),
-    format = "file"
-  ),
-  tar_target(
-    district_files,
-    list.files(here::here("data-raw", "prcd"), pattern = "*.csv", full.names = TRUE),
-    format = "file"
-  ),
-  tar_target(
-    candidate_vote_totals_file,
-    here::here("data-raw", "1976-2020-house.csv")
-  ),
-  tar_target(
-    district_pres_votes,
-    pmap_dfr(tibble(district_file = district_files,
-                    congress = 103:115),
-             prep_district_presidential_votes)
-  ),
-  tar_target(
-    votes_rc,
-    prep_votes_rc(raw_votes, raw_legis, congress_list = 102:117)
-  ),
+  # tar_target(
+  #   raw_votes,
+  #   here::here("data-raw", "Hall_votes.csv"),
+  #   format = "file"
+  # ),
+  # tar_target(
+  #   raw_legis,
+  #   here::here("data-raw", "CELHouse93to117Classic-1.xls"),
+  #   format = "file"
+  # ),
+  # tar_target(
+  #   district_files,
+  #   list.files(here::here("data-raw", "prcd"), pattern = "*.csv", full.names = TRUE),
+  #   format = "file"
+  # ),
+  # tar_target(
+  #   candidate_vote_totals_file,
+  #   here::here("data-raw", "1976-2020-house.csv")
+  # ),
+  # tar_target(
+  #   district_pres_votes,
+  #   pmap_dfr(tibble(district_file = district_files,
+  #                   congress = 103:115),
+  #            prep_district_presidential_votes)
+  # ),
+  # tar_target(
+  #   votes_rc,
+  #   prep_votes_rc(raw_votes, raw_legis, congress_list = 102:117)
+  # ),
   # tar_target(
   #   votes_irt,
   #   map(votes_rc$votes_list,
   #       fit_brms_irt)
   # ),
-  tar_target(
-    votes_irt,
-    fit_brms_irt(votes_rc$votes_list[[1]])
-  ),
-  tar_target(
-    votes_ideal,
-    map(votes_rc$votes_list_rc,
-        pscl::ideal,
-        dropList = list(lop = NA),
-        normalize = TRUE,
-        .progress = TRUE,
-        maxiter = 25000, burnin = 10000)
-  ),
-  tar_target(
-    votes_ideal_dps,
-    pmap_dfr(tibble(ideal_obj = votes_ideal, congress = 102:117),
-             process_ideal_points,
-             .progress = TRUE)
-  ),
-  tar_target(
-    clean_legis,
-    prep_legis(raw_legis)
-  ),
-  tar_target(
-    clean_candidate_votes,
-    prep_candidates(candidate_vote_totals_file)
-  ),
-  tar_target(
-    legis_ideal,
-    clean_candidate_votes |> 
-      left_join(district_pres_votes, by = c("congress", "district", "state")) |> 
-      left_join(clean_legis, by = c("congress", "party", "state", "district")) |> 
-      left_join(votes_ideal_dps, by = c("icpsr", "congress")) |>
-      na.omit() |>
-      group_split(party)
-  ),
-  tar_stan_mcmc(
-    dems_no_me,
-    stan_file = here("stan", "application", "no_me.stan"),
-    data = list(
-      N = nrow(legis_ideal[[1]]),
-      x_obs = legis_ideal[[1]]$mu,
-      control = legis_ideal[[1]]$r_vote_pct,
-      y = legis_ideal[[1]]$vote_pct)
-  ),
-  tar_stan_mcmc(
-    dems_me,
-    stan_file = here("stan", "application", "me.stan"),
-    data = list(
-      N = nrow(legis_ideal[[1]]),
-      x_obs = legis_ideal[[1]]$mu,
-      x_sd = legis_ideal[[1]]$sigma,
-      control = legis_ideal[[1]]$r_vote_pct,
-      y = legis_ideal[[1]]$vote_pct)
-  ),
-  tar_stan_mcmc(
-    reps_no_me,
-    stan_file = here("stan", "application", "no_me.stan"),
-    data = list(
-      N = nrow(legis_ideal[[2]]),
-      x_obs = legis_ideal[[2]]$mu,
-      control = legis_ideal[[2]]$r_vote_pct,
-      y = legis_ideal[[2]]$vote_pct)
-  ),
-  tar_stan_mcmc(
-    reps_me,
-    stan_file = here("stan", "application", "me.stan"),
-    data = list(
-      N = nrow(legis_ideal[[2]]),
-      x_obs = legis_ideal[[2]]$mu,
-      x_sd = legis_ideal[[2]]$sigma,
-      control = legis_ideal[[2]]$r_vote_pct,
-      y = legis_ideal[[2]]$vote_pct)
-  ),
-  tar_target(
-    test_d,
-    legis_ideal[[1]] 
-      # filter(alpha < 3, alpha > -3)
-  ),
-  tar_stan_mcmc(
-    dems_skew,
-    stan_file = here("stan", "application", "skew.stan"),
-    data = list(
-      N = nrow(test_d),
-      x_obs = test_d$mu,
-      x_sd = test_d$omega,
-      x_skew = test_d$alpha,
-      control = test_d$r_vote_pct,
-      y = test_d$vote_pct),
-    init = 0
-  ),
-  tar_target(
-    test_r,
-    legis_ideal[[2]] 
-      # filter(alpha > -3, alpha < 3)
-  ),
-  tar_stan_mcmc(
-    reps_skew,
-    stan_file = here("stan", "application", "skew.stan"),
-    data = list(
-      N = nrow(test_r),
-      x_obs = test_r$mu,
-      x_sd = test_r$omega,
-      x_skew = test_r$alpha,
-      control = test_r$r_vote_pct,
-      y = test_r$vote_pct),
-    init = 0
-  ),
-  tar_target(
-    reelection_draws,
-    assemble_reelection_draws(dems_no_me_draws_no_me,
-                              dems_me_draws_me,
-                              reps_no_me_draws_no_me,
-                              reps_me_draws_me,
-                              dems_skew_draws_skew,
-                              reps_skew_draws_skew)
-  ),
-  tar_target(
-    reelection_coef_plot,
-    compare_reelection_coefs(reelection_draws)
-  )
+  # tar_target(
+  #   votes_irt,
+  #   fit_brms_irt(votes_rc$votes_list[[1]])
+  # ),
+  # tar_target(
+  #   votes_ideal,
+  #   map(votes_rc$votes_list_rc,
+  #       pscl::ideal,
+  #       dropList = list(lop = NA),
+  #       normalize = TRUE,
+  #       .progress = TRUE,
+  #       maxiter = 25000, burnin = 10000)
+  # ),
+  # tar_target(
+  #   votes_ideal_dps,
+  #   pmap_dfr(tibble(ideal_obj = votes_ideal, congress = 102:117),
+  #            process_ideal_points,
+  #            .progress = TRUE)
+  # ),
+  # tar_target(
+  #   clean_legis,
+  #   prep_legis(raw_legis)
+  # ),
+  # tar_target(
+  #   clean_candidate_votes,
+  #   prep_candidates(candidate_vote_totals_file)
+  # ),
+  # tar_target(
+  #   legis_ideal,
+  #   clean_candidate_votes |> 
+  #     left_join(district_pres_votes, by = c("congress", "district", "state")) |> 
+  #     left_join(clean_legis, by = c("congress", "party", "state", "district")) |> 
+  #     left_join(votes_ideal_dps, by = c("icpsr", "congress")) |>
+  #     na.omit() |>
+  #     group_split(party)
+  # ),
+  # tar_stan_mcmc(
+  #   dems_no_me,
+  #   stan_file = here("stan", "application", "no_me.stan"),
+  #   data = list(
+  #     N = nrow(legis_ideal[[1]]),
+  #     x_obs = legis_ideal[[1]]$mu,
+  #     control = legis_ideal[[1]]$r_vote_pct,
+  #     y = legis_ideal[[1]]$vote_pct)
+  # ),
+  # tar_stan_mcmc(
+  #   dems_me,
+  #   stan_file = here("stan", "application", "me.stan"),
+  #   data = list(
+  #     N = nrow(legis_ideal[[1]]),
+  #     x_obs = legis_ideal[[1]]$mu,
+  #     x_sd = legis_ideal[[1]]$sigma,
+  #     control = legis_ideal[[1]]$r_vote_pct,
+  #     y = legis_ideal[[1]]$vote_pct)
+  # ),
+  # tar_stan_mcmc(
+  #   reps_no_me,
+  #   stan_file = here("stan", "application", "no_me.stan"),
+  #   data = list(
+  #     N = nrow(legis_ideal[[2]]),
+  #     x_obs = legis_ideal[[2]]$mu,
+  #     control = legis_ideal[[2]]$r_vote_pct,
+  #     y = legis_ideal[[2]]$vote_pct)
+  # ),
+  # tar_stan_mcmc(
+  #   reps_me,
+  #   stan_file = here("stan", "application", "me.stan"),
+  #   data = list(
+  #     N = nrow(legis_ideal[[2]]),
+  #     x_obs = legis_ideal[[2]]$mu,
+  #     x_sd = legis_ideal[[2]]$sigma,
+  #     control = legis_ideal[[2]]$r_vote_pct,
+  #     y = legis_ideal[[2]]$vote_pct)
+  # ),
+  # tar_target(
+  #   test_d,
+  #   legis_ideal[[1]] 
+  #     # filter(alpha < 3, alpha > -3)
+  # ),
+  # tar_stan_mcmc(
+  #   dems_skew,
+  #   stan_file = here("stan", "application", "skew.stan"),
+  #   data = list(
+  #     N = nrow(test_d),
+  #     x_obs = test_d$mu,
+  #     x_sd = test_d$omega,
+  #     x_skew = test_d$alpha,
+  #     control = test_d$r_vote_pct,
+  #     y = test_d$vote_pct),
+  #   init = 0
+  # ),
+  # tar_target(
+  #   test_r,
+  #   legis_ideal[[2]] 
+  #     # filter(alpha > -3, alpha < 3)
+  # ),
+  # tar_stan_mcmc(
+  #   reps_skew,
+  #   stan_file = here("stan", "application", "skew.stan"),
+  #   data = list(
+  #     N = nrow(test_r),
+  #     x_obs = test_r$mu,
+  #     x_sd = test_r$omega,
+  #     x_skew = test_r$alpha,
+  #     control = test_r$r_vote_pct,
+  #     y = test_r$vote_pct),
+  #   init = 0
+  # ),
+  # tar_target(
+  #   reelection_draws,
+  #   assemble_reelection_draws(dems_no_me_draws_no_me,
+  #                             dems_me_draws_me,
+  #                             reps_no_me_draws_no_me,
+  #                             reps_me_draws_me,
+  #                             dems_skew_draws_skew,
+  #                             reps_skew_draws_skew)
+  # ),
+  # tar_target(
+  #   reelection_coef_plot,
+  #   compare_reelection_coefs(reelection_draws)
+  # )
 )
