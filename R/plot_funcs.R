@@ -39,8 +39,7 @@ compare_cont_coefs <- function(me, meas, true) {
     scale_color_met_d("Isfahan1") +
     scale_x_reverse(limits = c(1, 0)) +
     # scale_fill_met_d("Morgenstern") +
-    theme(text = element_text(family = "serif"),
-          legend.position = "top") +
+    theme(legend.position = "top") +
     labs(y = "Parameter Estimate", x = "Correlation Between True Ideal Point and\nMean Measurement Error Ideal Point",
          color = "Model Type", caption = paste("True Coefficient Value =", true))
   return(p)
@@ -123,8 +122,7 @@ compare_coefs <- function(me_draws, no_me_draws, true) {
     scale_fill_manual(values = met.brewer("Isfahan1", 2)) +
     labs(x = "Coefficient Estimate", caption = paste("True Coefficient Value =", true)) +
     theme_ggdist() +
-    theme(text = element_text(family = "serif"),
-          legend.position = "none")
+    theme(legend.position = "none")
   
   return(p)
 }
