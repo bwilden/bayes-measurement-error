@@ -124,13 +124,13 @@ list(
     compare_coefs(me_cont_bias_draws_skew, 
                   no_me_cont_bias_draws_no_me_cont,
                   true = 0)
-  ),
-  tar_stan_mcmc(
-    skew_test,
-    stan_file = here("stan", "sim", "skewt.stan"),
-    data = list(N = 10000,
-                x = sn::rsn(10000, xi = 0, omega = 1, alpha = 0.1))
   )
+  # tar_stan_mcmc(
+  #   skew_test,
+  #   stan_file = here("stan", "sim", "skewt.stan"),
+  #   data = list(N = 10000,
+  #               x = sn::rsn(10000, xi = 0, omega = 1, alpha = 0.1))
+  # )
   
   # House Re-election Analysis
   # tar_target(

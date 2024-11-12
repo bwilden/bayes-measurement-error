@@ -26,7 +26,7 @@ compare_cont_coefs <- function(me, meas, true) {
   coefs <- rbind(me, meas)
   
   p <- coefs |> 
-    mutate(model_name = case_when(model_name == "Mean Values Only" ~ "Mean Only Model",
+    mutate(model_name = case_when(model_name == "Mean Values Only" ~ "Mean-Only Model",
                                   model_name == "Measurement Error" ~ "Measurement Error Model")) |> 
     ggplot(aes(x = corr_x, y = mean, color = model_name)) +
     geom_smooth(n = 8, fill = "gray", level = 0.89) +
@@ -108,7 +108,7 @@ compare_coefs <- function(me_draws, no_me_draws, true) {
       mutate(model = "Measurement Error\nModel"),
     no_me_draws |> 
       dplyr::select("beta") |> 
-      mutate(model = "Mean Only Model")
+      mutate(model = "Mean-Only Model")
   )
   
   p <- draws |>

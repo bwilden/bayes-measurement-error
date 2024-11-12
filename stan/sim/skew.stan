@@ -26,8 +26,6 @@ model {
   
   for (i in 1:N) {
     x_meas[i] ~ skew_normal(x[i], x_sd[i], x_skew[i]);
-        
     y[i] ~ normal(beta0 + beta * x[i], sigma);
   }
 }
-
